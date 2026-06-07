@@ -21,55 +21,72 @@ document.addEventListener("DOMContentLoaded", () => {
   let lastTickTime = Date.now();
   let hasPlayedHighScoreSound = false;
   let startX = 0, startY = 0;
+  let isMuted = false;
 
-  // ===== Safe Audio المحسن لبيئة تليجرام مع الحفاظ على نفس المسارات تماماً =====
-  function safeAudio(path, vol=0.5) {
-    try {
-      const a = new Audio(path);
-      a.volume = vol;
-      a.preload = "auto"; // إجبار تليجرام على تحميل الملف مسبقاً
-      return a;
-    } catch (e) {
-      return { play: () => Promise.resolve(), pause: () => {}, currentTime: 0, muted: false, playbackRate: 1, volume: vol };
-    }
-  }
-
-  const audioFiles = {
-    merge:       safeAudio("sound_effects/merge.mp3", 0.4),
-    swipe:       safeAudio("sound_effects/swipe.mp3", 0.2),
-    ticking:     safeAudio("sound_effects/timeout_loss.mp3", 0.5),
-    boardFull:   safeAudio("sound_effects/board_full.mp3", 0.5),
-    timeoutLoss: safeAudio("sound_effects/timer_end.mp3", 0.5),
-    highscore:   safeAudio("sound_effects/highscore.mp3", 0.5),
-    win2048:     safeAudio("sound_effects/win_2048.mp3", 0.6)
+  // تعريف المسارات والأحجام الثابتة بدون أي تغيير
+  const audioConfig = {
+    merge:       { path: "sound_effects/merge.mp3", vol: 0.4 },
+    swipe:       { path: "sound_effects/swipe.mp3", vol: 0.2 },
+    ticking:     { path: "sound_effects/timeout_loss.mp3", vol: 0.5 },
+    boardFull:   { path: "sound_effects/board_full.mp3", vol: 0.5 },
+    timeoutLoss: { path: "sound_effects/timer_end.mp3", vol: 0.5 },
+    highscore:   { path: "sound_effects/highscore.mp3", vol: 0.5 },
+    win2048:     { path: "sound_effects/win_2048.mp3", vol: 0.6 }
   };
 
-  // دالة موحدة آمنة لتشغيل الأصوات داخل تليجرام وتجنب تعليق الوعود الـ Promises
-  function playSoundSafe(audioObject, rate = 1.0) {
+  // كائن للاحتفاظ بصوت التكتكة المستمر فقط لمنع تكراره
+  let activeTickingAudio = null;
+
+  // الدالة السحرية البديلة والمحسنة لبيئة التليجرام (توليد لحظي ديناميكي لضمان التشغيل)
+  function playSoundSafe(soundKey, rate = 1.0) {
+    if (isMuted) return;
     try {
-      if (audioObject && typeof audioObject.play === 'function') {
-        audioObject.currentTime = 0; // التصفير اللحظي مهم جداً للتكرار السريع وأصوات الدمج
-        audioObject.playbackRate = rate;
-        const p = audioObject.play();
-        if (p && p.catch) {
-          p.catch(e => console.log("المتصفح حظر التشغيل التلقائي حتى يتفاعل اللاعب:", e));
+      const config = audioConfig[soundKey];
+      if (!config) return;
+
+      // معالجة خاصة لصوت التكتكة المستمر لحمايته من التداخل
+      if (soundKey === 'ticking') {
+        if (!activeTickingAudio) {
+          activeTickingAudio = new Audio(config.path);
+          activeTickingAudio.volume = config.vol;
+          activeTickingAudio.loop = true;
+          activeTickingAudio.playbackRate = rate;
+          activeTickingAudio.play().catch(() => {});
+        } else {
+          activeTickingAudio.playbackRate = rate;
         }
+        return;
+      }
+
+      // بقية المؤثرات الفورية (مثل الدمج والسحب) تُنشأ وتُطلق ديناميكياً لكسر حظر المتصفح
+      const audioInstance = new Audio(config.path);
+      audioInstance.volume = config.vol;
+      audioInstance.playbackRate = rate;
+      
+      const p = audioInstance.play();
+      if (p && p.catch) {
+        p.catch(() => {});
       }
     } catch (_) {}
   }
 
-  // دالة فك الحظر السحرية المتوافقة مع لمس الشاشة على الهواتف داخل تليجرام
-  function unlockAudio() {
-    Object.values(audioFiles).forEach(s => {
+  // إيقاف الصوت المستمر عند الحاجة
+  function stopTickingSound() {
+    if (activeTickingAudio) {
       try {
-        if (s && typeof s.play === 'function') {
-          const p = s.play();
-          if (p && p.then) {
-            p.then(() => { s.pause(); s.currentTime = 0; }).catch(() => {});
-          }
-        }
-      } catch(_) {}
-    });
+        activeTickingAudio.pause();
+        activeTickingAudio = null;
+      } catch (_) {}
+    }
+  }
+
+  // تفعيل أولي آمن لوحدات الصوت عند لمس الشاشة لأول مرة فكاً للقيود الأساسية
+  function unlockAudio() {
+    try {
+      const dummy = new Audio(audioConfig.swipe.path);
+      dummy.volume = 0.0;
+      dummy.play().then(() => { dummy.pause(); }).catch(() => {});
+    } catch (_) {}
     document.removeEventListener("touchstart", unlockAudio, true);
     document.removeEventListener("click", unlockAudio, true);
   }
@@ -78,7 +95,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // ===== منع السحب / الانعكاس =====
   document.addEventListener('touchmove', (e) => {
-    // نسمح بحركات السحب داخل اللوحة فقط
     if (!e.target.closest('.game-board')) e.preventDefault();
   }, { passive: false });
   document.body.style.overscrollBehavior = 'none';
@@ -139,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
         hasPlayedHighScoreSound = true;
         document.body.classList.add("celebration-flash");
         setTimeout(()=>document.body.classList.remove("celebration-flash"),600);
-        playSoundSafe(audioFiles.highscore);
+        playSoundSafe('highscore');
       }
     } else {
       sBox && sBox.classList.remove("score-leader");
@@ -219,10 +235,10 @@ document.addEventListener("DOMContentLoaded", () => {
           window.coinsManager.addCoins(2);
         }
         const mRate = 1 + combo * 0.12;
-        playSoundSafe(audioFiles.merge, mRate);
+        playSoundSafe('merge', mRate);
       } else {
         combo = 0;
-        playSoundSafe(audioFiles.swipe);
+        playSoundSafe('swipe');
       }
 
       if (combo >= 2) { if(comboCountEl) comboCountEl.textContent="X"+combo+" 🔥"; if(comboBoxEl) comboBoxEl.style.display="block"; }
@@ -237,13 +253,13 @@ document.addEventListener("DOMContentLoaded", () => {
       addRandom(); render();
 
       if (checkWin()) {
-        playSoundSafe(audioFiles.win2048);
+        playSoundSafe('win2048');
         if (messageEl) messageEl.textContent = "🎉 أسطورة! صنعت 2048!";
       } else if (checkGameOver()) {
         clearInterval(timerInterval); timerInterval = null;
         handleEndGameHighScore();
-        try { audioFiles.ticking.pause(); } catch(_){}
-        playSoundSafe(audioFiles.boardFull);
+        stopTickingSound();
+        playSoundSafe('boardFull');
         if (window.stopBoardWatch) window.stopBoardWatch();
         if (messageEl) messageEl.textContent = boardFullMessages[Math.floor(Math.random()*boardFullMessages.length)];
         document.getElementById("gameOverPopup").style.display = "flex";
@@ -268,14 +284,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (timerElement) { timerElement.style.background="#66FCF1"; timerElement.classList.remove("timerDanger"); }
     if (progressBarEl) { progressBarEl.style.background="#66FCF1"; progressBarEl.style.boxShadow="0 0 8px #66FCF1"; }
     const overlay = document.getElementById("dangerOverlay"); if (overlay) overlay.classList.remove("panicFlash");
-    try { audioFiles.timeoutLoss.pause(); audioFiles.boardFull.pause(); audioFiles.ticking.pause(); } catch(_){}
+    stopTickingSound();
     init();
     if (window.rewardedTiles) window.rewardedTiles.clear();
     checkAndSetStage();
     timeLeft = maxStageTime;
     if (messageEl) messageEl.textContent = "";
     lastTickTime = Date.now();
-    // ✅ تفعيل Panic Timer فوراً
     timerInterval = setInterval(updateTimer, 1000);
   }
 
@@ -324,18 +339,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (confirm("هل أنت متأكد من إعادة تشغيل الجولة؟")) restartGame();
   });
 
-  let isMuted = false;
   const soundToggleBtn = document.getElementById("soundToggleBtn");
   if (soundToggleBtn) soundToggleBtn.addEventListener("click", () => {
     isMuted = !isMuted;
-    Object.values(audioFiles).forEach(s => { try { s.muted = isMuted; } catch(_){} });
+    if (isMuted) {
+      stopTickingSound();
+    }
     soundToggleBtn.querySelector('.btn-icon').textContent = isMuted ? "🔇" : "🔊";
   });
 
   const startFreeBtn = document.getElementById("startFreeButton");
   if (startFreeBtn) startFreeBtn.addEventListener("click", restartGame);
 
-  // إدخل
+  // إدخال
   document.addEventListener("keydown", e => {
     switch(e.key){
       case "ArrowLeft": move("left"); break;
@@ -377,7 +393,7 @@ document.addEventListener("DOMContentLoaded", () => {
       timerElement.classList.add("timerDanger");
       if (overlay) overlay.classList.add("panicFlash");
       const tRate = maxStageTime === 10 ? 1.5 : 1.0;
-      playSoundSafe(audioFiles.ticking, tRate);
+      playSoundSafe('ticking', tRate);
     }
 
     if (timeLeft > danger) {
@@ -391,14 +407,14 @@ document.addEventListener("DOMContentLoaded", () => {
       document.body.classList.remove("shake");
       timerElement.classList.remove("timerDanger");
       if (overlay) overlay.classList.remove("panicFlash");
-      try { audioFiles.ticking.pause(); } catch(_){}
+      stopTickingSound();
     }
 
     if (timeLeft <= 0) {
       clearInterval(timerInterval); timerInterval = null;
       handleEndGameHighScore();
-      try { audioFiles.ticking.pause(); } catch(_){}
-      playSoundSafe(audioFiles.timeoutLoss);
+      stopTickingSound();
+      playSoundSafe('timeoutLoss');
       if (window.stopBoardWatch) window.stopBoardWatch();
       if (messageEl) messageEl.textContent = timeOutMessages[Math.floor(Math.random()*timeOutMessages.length)];
       document.getElementById("gameOverPopup").style.display = "flex";
