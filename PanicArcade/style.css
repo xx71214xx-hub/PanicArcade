@@ -1,0 +1,33 @@
+/* ===== XP داخل شريط البروفايل ===== */
+.tg-xp{
+  font-size:12px;color:#ffd700;margin-top:2px;font-weight:bold;
+  text-shadow:0 0 6px rgba(255,215,0,.35);
+}
+
+/* ===== Force Join Modal ===== */
+.hub-container.blurred{filter:blur(6px);pointer-events:none;user-select:none;}
+.fj-modal{
+  position:fixed;inset:0;background:rgba(0,0,0,.85);
+  display:none;justify-content:center;align-items:center;z-index:99999;
+  padding:20px;
+}
+.fj-modal.open{display:flex;}
+.fj-box{
+  background:linear-gradient(145deg,#253142,#1a2431);
+  border:2px solid rgba(102,252,241,.4);
+  border-radius:24px;padding:26px 22px;max-width:340px;width:100%;
+  text-align:center;color:#fff;box-shadow:0 0 40px rgba(102,252,241,.25);
+}
+.fj-icon{font-size:46px;margin-bottom:8px;}
+.fj-box h2{margin:6px 0 10px;font-size:20px;color:#66FCF1;}
+.fj-box p{color:#9aa7b5;font-size:14px;line-height:1.6;margin:0 0 18px;}
+.fj-btn{
+  display:block;width:100%;margin:8px 0;padding:12px;border-radius:14px;
+  font-weight:bold;font-size:15px;cursor:pointer;border:1px solid rgba(0,245,255,.3);
+  text-decoration:none;color:#fff;
+  background:rgba(0,245,255,.08);transition:.15s;
+}
+.fj-btn:hover{background:rgba(0,245,255,.2);}
+.fj-join{border-color:#66FCF1;}
+.fj-verify{background:linear-gradient(145deg,#ffd700,#b89200);color:#0b0c10;border:none;}
+.fj-status{margin-top:12px;font-size:13px;color:#ffd700;min-height:18px;}

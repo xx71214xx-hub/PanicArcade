@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0B0C10">
+  <title>منصة Panic Arcade للألعاب</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+</head>
+<body>
+  <div class="stars-bg"></div>
+
+  <!-- Modal الاشتراك الإجباري -->
+  <div id="forceJoinModal" class="fj-modal" aria-hidden="true">
+    <div class="fj-box">
+      <div class="fj-icon">📢</div>
+      <h2>اشترك في القناة لبدء اللعب</h2>
+      <p>للوصول إلى منصة Panic Arcade، يجب الاشتراك في قناتنا الرسمية على تليجرام.</p>
+      <a id="fjJoinBtn" href="#" target="_blank" rel="noopener" class="fj-btn fj-join">🔗 اشترك في القناة</a>
+      <button id="fjVerifyBtn" class="fj-btn fj-verify">✅ تحقق من الاشتراك</button>
+      <div id="fjStatus" class="fj-status"></div>
+    </div>
+  </div>
+
+  <div class="hub-container" id="hubContent">
+    <div id="tgProfileBar" class="tg-profile-bar">
+      <div class="tg-avatar-wrapper">
+        <img id="userAvatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%231f2833'/><text x='50%27 y='55%27 font-family='sans-serif' font-size='30' fill='%2366FCF1' text-anchor='middle'>🎮</text></svg>" alt="Avatar" class="tg-avatar">
+        <div class="tg-status-dot"></div>
+      </div>
+      <div class="tg-user-info">
+        <div id="userName" class="tg-username">زائر المنصة</div>
+        <div id="userXP" class="tg-xp">XP: 0.0 ⭐</div>
+        <div id="userRank" class="tg-rank">مستوى الحساب: نشط ⚡</div>
+      </div>
+      <div class="tg-platform-badge">Telegram Hub</div>
+    </div>
+
+    <header class="hub-header">
+      <h1>PANIC <span>ARCADE</span></h1>
+      <p class="hub-subtitle">اختر تحديك البصري والسريع وابدأ اللعب فوراً</p>
+    </header>
+
+    <div class="games-grid">
+      <div class="game-card active">
+        <div class="card-glow"></div>
+        <div class="game-badge">نشطة 🔥</div>
+        <div class="game-icon-wrapper">
+          <img src="cover.png" alt="Panic 2048 Cover" class="game-cover-img">
+        </div>
+        <h2 class="game-title">Panic Arcade 2048</h2>
+        <p class="game-desc">دمج أرقام سريع تحت ضغط الوقت المتغير ونظام إدارة العملات الذكي.</p>
+        <a href="game_2048/index.html" class="play-btn-3d">▶️ اِلعب الآن</a>
+      </div>
+
+      <div class="game-card coming-soon">
+        <div class="game-badge locked">قريباً 🔒</div>
+        <div class="game-icon-wrapper"><span class="game-icon">🚀</span></div>
+        <h2 class="game-title">تحدي السرعة القادم</h2>
+        <p class="game-desc">لعبة آركيد جديدة تعتمد على المهارة اللمسية والسرعة الفائقة.</p>
+        <button class="play-btn-3d disabled" disabled>⏳ مغلق مؤقتاً</button>
+      </div>
+    </div>
+
+    <footer class="hub-footer"><p>&copy; 2026 جميع الحقوق محفوظة لـ Panic Arcade</p></footer>
+  </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  // منع السحب للأسفل (Pull-to-refresh)
+  document.body.addEventListener('touchmove', function(e){
+    if (e.target.closest('.fj-modal')) return;
+  }, { passive: true });
+
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { try { tg.ready(); tg.expand(); } catch(_){} }
+
+  // بيانات المستخدم
+  const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+  if (user) {
+    const fullName = (user.first_name||"") + " " + (user.last_name||"");
+    document.getElementById("userName").textContent = fullName.trim() || user.username || "لاعب تليجرام";
+    if (user.photo_url) document.getElementById("userAvatar").src = user.photo_url;
+    document.getElementById("userRank").textContent = user.username ? "@"+user.username : "ID: "+user.id;
+  }
+
+  // XP من إجمالي العملات
+  function updateXP() {
+    const coins = parseInt(localStorage.getItem("gameCoins")) || 0;
+    const xp = (coins / (window.APP_CONFIG.XP_DIVISOR || 1000)).toFixed(1);
+    const el = document.getElementById("userXP");
+    if (el) el.textContent = "XP: " + xp + " ⭐";
+  }
+  updateXP();
+  window.addEventListener("storage", updateXP);
+  window.addEventListener("coinsChanged", updateXP);
+  setInterval(updateXP, 1500);
+
+  // Force Join
+  const modal   = document.getElementById("forceJoinModal");
+  const hub     = document.getElementById("hubContent");
+  const joinBtn = document.getElementById("fjJoinBtn");
+  const verBtn  = document.getElementById("fjVerifyBtn");
+  const statusEl= document.getElementById("fjStatus");
+
+  joinBtn.href = window.APP_CONFIG.CHANNEL_LINK;
+
+  function lockUI(){
+    modal.classList.add("open");
+    hub.classList.add("blurred");
+  }
+  function unlockUI(){
+    modal.classList.remove("open");
+    hub.classList.remove("blurred");
+    localStorage.setItem("channelJoined","1");
+  }
+
+  if (localStorage.getItem("channelJoined") === "1") {
+    unlockUI();
+  } else {
+    lockUI();
+  }
+
+  verBtn.addEventListener("click", async () => {
+    statusEl.textContent = "⏳ جاري التحقق...";
+    verBtn.disabled = true;
+    try {
+      const initData = (tg && tg.initData) ? tg.initData : "";
+      if (!initData) { statusEl.textContent = "⚠️ افتح التطبيق من داخل تليجرام."; verBtn.disabled=false; return; }
+      const res = await fetch(window.APP_CONFIG.VERIFY_ENDPOINT, {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ initData })
+      });
+      const data = await res.json();
+      if (data.ok && data.joined) {
+        statusEl.textContent = "✅ تم التحقق بنجاح!";
+        setTimeout(unlockUI, 500);
+      } else {
+        statusEl.textContent = "❌ لم يتم العثور على اشتراكك. اشترك ثم أعد المحاولة.";
+      }
+    } catch (err) {
+      statusEl.textContent = "⚠️ خطأ في الاتصال بالخادم.";
+    }
+    verBtn.disabled = false;
+  });
+});
+</script>
+</body>
+</html>
