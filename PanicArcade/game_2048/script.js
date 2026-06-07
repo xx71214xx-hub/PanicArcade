@@ -22,12 +22,12 @@ document.addEventListener("DOMContentLoaded", () => {
   let hasPlayedHighScoreSound = false;
   let startX = 0, startY = 0;
 
-  // ===== Safe Audio =====
+  // ===== Safe Audio المحسن لبيئة تليجرام مع الحفاظ على نفس المسارات تماماً =====
   function safeAudio(path, vol=0.5) {
     try {
       const a = new Audio(path);
       a.volume = vol;
-      a.play = (orig => function(){ try { return orig.call(this); } catch(e){ return Promise.resolve(); } })(a.play);
+      a.preload = "auto"; // إجبار تليجرام على تحميل الملف مسبقاً
       return a;
     } catch (e) {
       return { play: () => Promise.resolve(), pause: () => {}, currentTime: 0, muted: false, playbackRate: 1, volume: vol };
@@ -44,11 +44,30 @@ document.addEventListener("DOMContentLoaded", () => {
     win2048:     safeAudio("sound_effects/win_2048.mp3", 0.6)
   };
 
+  // دالة موحدة آمنة لتشغيل الأصوات داخل تليجرام وتجنب تعليق الوعود الـ Promises
+  function playSoundSafe(audioObject, rate = 1.0) {
+    try {
+      if (audioObject && typeof audioObject.play === 'function') {
+        audioObject.currentTime = 0; // التصفير اللحظي مهم جداً للتكرار السريع وأصوات الدمج
+        audioObject.playbackRate = rate;
+        const p = audioObject.play();
+        if (p && p.catch) {
+          p.catch(e => console.log("المتصفح حظر التشغيل التلقائي حتى يتفاعل اللاعب:", e));
+        }
+      }
+    } catch (_) {}
+  }
+
+  // دالة فك الحظر السحرية المتوافقة مع لمس الشاشة على الهواتف داخل تليجرام
   function unlockAudio() {
     Object.values(audioFiles).forEach(s => {
       try {
-        const p = s.play();
-        if (p && p.then) p.then(()=>{ s.pause(); s.currentTime=0; }).catch(()=>{});
+        if (s && typeof s.play === 'function') {
+          const p = s.play();
+          if (p && p.then) {
+            p.then(() => { s.pause(); s.currentTime = 0; }).catch(() => {});
+          }
+        }
       } catch(_) {}
     });
     document.removeEventListener("touchstart", unlockAudio, true);
@@ -120,7 +139,7 @@ document.addEventListener("DOMContentLoaded", () => {
         hasPlayedHighScoreSound = true;
         document.body.classList.add("celebration-flash");
         setTimeout(()=>document.body.classList.remove("celebration-flash"),600);
-        try { audioFiles.highscore.currentTime = 0; audioFiles.highscore.play(); } catch(_){}
+        playSoundSafe(audioFiles.highscore);
       }
     } else {
       sBox && sBox.classList.remove("score-leader");
@@ -199,10 +218,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (combo >= 5 && combo % 2 === 0 && Math.random() < 0.5 && window.coinsManager) {
           window.coinsManager.addCoins(2);
         }
-        try { audioFiles.merge.playbackRate = 1 + combo*0.12; audioFiles.merge.currentTime = 0; audioFiles.merge.play(); } catch(_){}
+        const mRate = 1 + combo * 0.12;
+        playSoundSafe(audioFiles.merge, mRate);
       } else {
         combo = 0;
-        try { audioFiles.swipe.currentTime = 0; audioFiles.swipe.play(); } catch(_){}
+        playSoundSafe(audioFiles.swipe);
       }
 
       if (combo >= 2) { if(comboCountEl) comboCountEl.textContent="X"+combo+" 🔥"; if(comboBoxEl) comboBoxEl.style.display="block"; }
@@ -217,12 +237,13 @@ document.addEventListener("DOMContentLoaded", () => {
       addRandom(); render();
 
       if (checkWin()) {
-        try { audioFiles.win2048.play(); } catch(_){}
+        playSoundSafe(audioFiles.win2048);
         if (messageEl) messageEl.textContent = "🎉 أسطورة! صنعت 2048!";
       } else if (checkGameOver()) {
         clearInterval(timerInterval); timerInterval = null;
         handleEndGameHighScore();
-        try { audioFiles.ticking.pause(); audioFiles.boardFull.currentTime=0; audioFiles.boardFull.play(); } catch(_){}
+        try { audioFiles.ticking.pause(); } catch(_){}
+        playSoundSafe(audioFiles.boardFull);
         if (window.stopBoardWatch) window.stopBoardWatch();
         if (messageEl) messageEl.textContent = boardFullMessages[Math.floor(Math.random()*boardFullMessages.length)];
         document.getElementById("gameOverPopup").style.display = "flex";
@@ -314,7 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const startFreeBtn = document.getElementById("startFreeButton");
   if (startFreeBtn) startFreeBtn.addEventListener("click", restartGame);
 
-  // إدخال
+  // إدخل
   document.addEventListener("keydown", e => {
     switch(e.key){
       case "ArrowLeft": move("left"); break;
@@ -355,7 +376,8 @@ document.addEventListener("DOMContentLoaded", () => {
       document.body.classList.add("shake");
       timerElement.classList.add("timerDanger");
       if (overlay) overlay.classList.add("panicFlash");
-      try { audioFiles.ticking.playbackRate = maxStageTime === 10 ? 1.5 : 1.0; audioFiles.ticking.play(); } catch(_){}
+      const tRate = maxStageTime === 10 ? 1.5 : 1.0;
+      playSoundSafe(audioFiles.ticking, tRate);
     }
 
     if (timeLeft > danger) {
@@ -375,7 +397,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (timeLeft <= 0) {
       clearInterval(timerInterval); timerInterval = null;
       handleEndGameHighScore();
-      try { audioFiles.ticking.pause(); audioFiles.timeoutLoss.currentTime=0; audioFiles.timeoutLoss.play(); } catch(_){}
+      try { audioFiles.ticking.pause(); } catch(_){}
+      playSoundSafe(audioFiles.timeoutLoss);
       if (window.stopBoardWatch) window.stopBoardWatch();
       if (messageEl) messageEl.textContent = timeOutMessages[Math.floor(Math.random()*timeOutMessages.length)];
       document.getElementById("gameOverPopup").style.display = "flex";
