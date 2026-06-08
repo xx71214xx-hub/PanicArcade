@@ -5,7 +5,7 @@
   /*
   ضع هنا الـ Publishable Key الحقيقي كاملاً
   */
-  const SUPABASE_KEY = "PUT_YOUR_PUBLISHABLE_KEY_HERE";
+  const SUPABASE_KEY = "sb_publishable_qeGW6AkAcp7WUdhN4N9ptA_uVmAdrgY";
 
   const supabaseClient = supabase.createClient(
     SUPABASE_URL,
@@ -20,17 +20,22 @@
 
     if (!telegramId) return;
 
-    const { data } = await supabaseClient
+    const { data, error } = await supabaseClient
       .from("users")
-      .select("*")
+      .select("coins")
       .eq("telegram_id", telegramId)
-      .single();
+      .maybeSingle();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
 
     if (!data) {
 
       await supabaseClient
         .from("users")
-        .insert({
+        .upsert({
           telegram_id: telegramId,
           coins: 50
         });
@@ -39,7 +44,7 @@
 
     } else {
 
-      coins = data.coins || 50;
+      coins = Number(data.coins || 50);
 
     }
 
@@ -79,18 +84,18 @@
 
   const coinsManager = {
     getCoins: () => coins,
-    addCoins(amount) {
+    async addCoins(amount) {
       coins += amount;
-      saveCoins();
+      await saveCoins();
       updateCoinsUI();
       const box = document.getElementById("coinsBox");
       if (box) { box.classList.remove("coin-gain"); void box.offsetWidth; box.classList.add("coin-gain"); }
       emitCoinsChanged();
     },
-    deductCoins(amount) {
+    async deductCoins(amount) {
       if (coins >= amount) {
         coins -= amount;
-        saveCoins();
+        await saveCoins();
         updateCoinsUI();
         emitCoinsChanged();
         return true;
