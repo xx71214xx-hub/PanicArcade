@@ -72,9 +72,34 @@
   document.addEventListener('touchmove', function(e){
     if (e.scale && e.scale !== 1) e.preventDefault();
   }, { passive: false });
+
   window.addEventListener('load', () => {
     const tg = window.Telegram && window.Telegram.WebApp;
     if (tg) { try { tg.ready(); tg.expand(); tg.disableVerticalSwipes && tg.disableVerticalSwipes(); } catch(_){} }
+  });
+
+  // 🔒 ربط إضافي آمن ومباشر لحل مشكلة تجميد أزرار الـ Popup نهائياً والخصم بالتزامن
+  document.addEventListener("DOMContentLoaded", () => {
+    const payBtn = document.getElementById("popupButton");
+    const freeBtn = document.getElementById("startFreeButton");
+
+    if (payBtn) {
+      payBtn.onclick = async function(e) {
+        e.preventDefault();
+        if (window.handlePayAndStart) {
+          await window.handlePayAndStart();
+        }
+      };
+    }
+
+    if (freeBtn) {
+      freeBtn.onclick = async function(e) {
+        e.preventDefault();
+        if (window.handlePayAndStart) {
+          await window.handlePayAndStart();
+        }
+      };
+    }
   });
 </script>
 </body>
