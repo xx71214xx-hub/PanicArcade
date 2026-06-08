@@ -296,6 +296,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function handlePayAndStart() {
     if (window.coinsManager && window.coinsManager.getCoins() >= 5) {
+      // 🔒 إصلاح الانتظار لعدم حدوث تجميد ولإرسال البيانات الصحيحة للسيرفر فوراً
       const success = await window.coinsManager.deductCoins(5);
       if (success) { 
         restartGame(); 
@@ -354,14 +355,17 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const startFreeBtn = document.getElementById("startFreeButton");
-  if (startFreeBtn) startFreeBtn.addEventListener("click", async () => {
-    const currentCoins = (window.coinsManager && typeof window.coinsManager.getCoins === 'function') ? window.coinsManager.getCoins() : 0;
-    if (currentCoins < 5) {
-      alert("عذراً، ليس لديك عملات كافية!");
-    } else {
-      await handlePayAndStart();
-    }
-  });
+  if (startFreeBtn) {
+    // 🔒 تحويل الحدث لمستقبل متزامن لضمان الخصم وبدء اللعبة
+    startFreeBtn.addEventListener("click", async () => {
+      const currentCoins = (window.coinsManager && typeof window.coinsManager.getCoins === 'function') ? window.coinsManager.getCoins() : 0;
+      if (currentCoins < 5) {
+        alert("عذراً، ليس لديك عملات كافية!");
+      } else {
+        await handlePayAndStart();
+      }
+    });
+  }
 
   document.addEventListener("keydown", e => {
     switch(e.key){
