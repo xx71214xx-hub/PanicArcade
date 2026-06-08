@@ -1,7 +1,63 @@
 // coins.js - نظام العملات + إشعار XP + تنظيف الذاكرة
 (function () {
-  let coins = parseInt(localStorage.getItem("gameCoins")) || 50;
+  const SUPABASE_URL = "https://xweraplvjexwfnpkjxpr.supabase.co";
+
+  /*
+  ضع هنا الـ Publishable Key الحقيقي كاملاً
+  */
+  const SUPABASE_KEY = "PUT_YOUR_PUBLISHABLE_KEY_HERE";
+
+  const supabaseClient = supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+  );
+
+  let telegramId = null;
+  let coins = 50;
   let boardObserver = null;
+
+  async function loadCoins() {
+
+    if (!telegramId) return;
+
+    const { data } = await supabaseClient
+      .from("users")
+      .select("*")
+      .eq("telegram_id", telegramId)
+      .single();
+
+    if (!data) {
+
+      await supabaseClient
+        .from("users")
+        .insert({
+          telegram_id: telegramId,
+          coins: 50
+        });
+
+      coins = 50;
+
+    } else {
+
+      coins = data.coins || 50;
+
+    }
+
+    updateCoinsUI();
+    emitCoinsChanged();
+  }
+
+  async function saveCoins() {
+
+    if (!telegramId) return;
+
+    await supabaseClient
+      .from("users")
+      .update({
+        coins: coins
+      })
+      .eq("telegram_id", telegramId);
+  }
 
   function emitCoinsChanged() {
     try { window.dispatchEvent(new CustomEvent("coinsChanged", { detail: { coins } })); } catch (_) {}
@@ -25,7 +81,7 @@
     getCoins: () => coins,
     addCoins(amount) {
       coins += amount;
-      localStorage.setItem("gameCoins", coins);
+      saveCoins();
       updateCoinsUI();
       const box = document.getElementById("coinsBox");
       if (box) { box.classList.remove("coin-gain"); void box.offsetWidth; box.classList.add("coin-gain"); }
@@ -34,7 +90,7 @@
     deductCoins(amount) {
       if (coins >= amount) {
         coins -= amount;
-        localStorage.setItem("gameCoins", coins);
+        saveCoins();
         updateCoinsUI();
         emitCoinsChanged();
         return true;
@@ -129,6 +185,10 @@
     // اسم المستخدم في الشريط المصغر
     const tg = window.Telegram && window.Telegram.WebApp;
     const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+    if (u && u.id) {
+      telegramId = u.id;
+      loadCoins();
+    }
     const nameEl = document.getElementById("miniUserName");
     if (nameEl && u) nameEl.textContent = (u.first_name || u.username || "لاعب");
   });
