@@ -15,6 +15,8 @@
   let telegramId = null;
   let coins = 50;
   let boardObserver = null;
+  // 🔒 متغير أمان لمنع التعديل والحفظ العشوائي قبل تمام التحميل من السيرفر
+  let isCoinsLoaded = false; 
 
   async function loadCoins() {
 
@@ -48,13 +50,15 @@
 
     }
 
+    isCoinsLoaded = true; // 👍 تم التحميل بنجاح، الآن مسموح بالحفظ والخصم
     updateCoinsUI();
     emitCoinsChanged();
   }
 
   async function saveCoins() {
 
-    if (!telegramId) return;
+    // 🛑 منع الحفظ نهائياً إذا لم يتم تحميل رصيد المستخدم أولاً لحماية السيرفر من البيانات الافتراضية
+    if (!telegramId || !isCoinsLoaded) return;
 
     await supabaseClient
       .from("users")
@@ -85,6 +89,7 @@
   const coinsManager = {
     getCoins: () => coins,
     async addCoins(amount) {
+      if (!isCoinsLoaded) return; // حماية منطقية
       coins += amount;
       await saveCoins();
       updateCoinsUI();
@@ -93,6 +98,11 @@
       emitCoinsChanged();
     },
     async deductCoins(amount) {
+      // 🛑 إذا لم ينتهِ التحميل بعد، ارفض الخصم لحين جلب الرصيد الحقيقي
+      if (!isCoinsLoaded) {
+        console.warn("جاري تحميل الرصيد من السيرفر.. انتظر لحظة");
+        return false; 
+      }
       if (coins >= amount) {
         coins -= amount;
         await saveCoins();
