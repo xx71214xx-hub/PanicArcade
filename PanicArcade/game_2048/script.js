@@ -1,4 +1,4 @@
-// script.js - منطق لعبة 2048 (النسخة الاحترافية المتكاملة مع نظام الأقراص الصوتية Pool والعملات)
+// script.js - منطق لعبة 2048 (النسخة الاحترافية المُصلَّحة بالكامل)
 document.addEventListener("DOMContentLoaded", () => {
 
   const SIZE = 4;
@@ -23,85 +23,68 @@ document.addEventListener("DOMContentLoaded", () => {
   let startX = 0, startY = 0;
   let isMuted = false;
 
-  // إعدادات المؤثرات الصوتية (تعديل الحرف الأول ليكون كابيتال ليطابق المجلد في الاستضافة)
+  // إعدادات المؤثرات الصوتية
   const audioConfig = {
-    merge:       { path: "Sound_effects/merge.mp3", vol: 0.4 },
-    swipe:       { path: "Sound_effects/swipe.mp3", vol: 0.2 },
-    ticking:     { path: "Sound_effects/timeout_loss.mp3", vol: 0.5 },
-    boardFull:   { path: "Sound_effects/board_full.mp3", vol: 0.5 },
-    timeoutLoss: { path: "Sound_effects/timer_end.mp3", vol: 0.5 },
-    highscore:   { path: "Sound_effects/highscore.mp3", vol: 0.5 },
-    win2048:     { path: "Sound_effects/win_2048.mp3", vol: 0.6 }
+    merge:       { path: "sound_effects/merge.mp3", vol: 0.4 },
+    swipe:       { path: "sound_effects/swipe.mp3", vol: 0.2 },
+    ticking:     { path: "sound_effects/timeout_loss.mp3", vol: 0.5 },
+    boardFull:   { path: "sound_effects/board_full.mp3", vol: 0.5 },
+    timeoutLoss: { path: "sound_effects/timer_end.mp3", vol: 0.5 },
+    highscore:   { path: "sound_effects/highscore.mp3", vol: 0.5 },
+    win2048:     { path: "sound_effects/win_2048.mp3", vol: 0.6 }
   };
 
   let activeTickingAudio = null;
 
-  // إنشاء جميع الأصوات مرة واحدة (audioPool) لضمان التوافق المطلق مع Telegram WebView
-  const audioPool = {};
-
-  Object.keys(audioConfig).forEach(key => {
-    const audio = new Audio(audioConfig[key].path);
-    audio.volume = audioConfig[key].vol;
-    audio.preload = "auto";
-    audioPool[key] = audio;
-  });
-
+  // دالة تشغيل الصوت الديناميكية الآمنة لتخطي قيود الجوال وتليجرام
   function playSoundSafe(soundKey, rate = 1.0) {
     if (isMuted) return;
-
     try {
-      const audio = audioPool[soundKey];
-      if (!audio) return;
+      const config = audioConfig[soundKey];
+      if (!config) return;
 
-      if (soundKey === "ticking") {
+      if (soundKey === 'ticking') {
         if (!activeTickingAudio) {
-          activeTickingAudio = audio;
+          activeTickingAudio = new Audio(config.path);
+          activeTickingAudio.volume = config.vol;
           activeTickingAudio.loop = true;
+          activeTickingAudio.playbackRate = rate;
+          activeTickingAudio.play().catch(() => {});
+        } else {
+          activeTickingAudio.playbackRate = rate;
         }
-
-        activeTickingAudio.playbackRate = rate;
-
-        const p = activeTickingAudio.play();
-        if (p) p.catch(() => {});
         return;
       }
 
-      audio.pause();
-      audio.currentTime = 0;
-      audio.playbackRate = rate;
-
-      const p = audio.play();
-      if (p) p.catch(() => {});
-
+      const audioInstance = new Audio(config.path);
+      audioInstance.volume = config.vol;
+      audioInstance.playbackRate = rate;
+      
+      const p = audioInstance.play();
+      if (p && p.catch) {
+        p.catch(() => {});
+      }
     } catch (_) {}
   }
 
   function stopTickingSound() {
-    if (!activeTickingAudio) return;
-
-    try {
-      activeTickingAudio.pause();
-      activeTickingAudio.currentTime = 0;
-    } catch (_) {}
-
-    activeTickingAudio = null;
+    if (activeTickingAudio) {
+      try {
+        activeTickingAudio.pause();
+        activeTickingAudio = null;
+      } catch (_) {}
+    }
   }
 
-  // تحديث دالة فك حظر الصوت برمجياً عبر تفريغ الأقراص الصوتية المحملة مسبقاً فور اللمس
+  // تفعيل وإجبار المتصفح على تفعيل شفرة الصوت فور أول تفاعل ملموس مع الشاشة
   function unlockAudio() {
-    Object.values(audioPool).forEach(audio => {
+    Object.keys(audioConfig).forEach(key => {
       try {
-        const p = audio.play();
-
-        if (p) {
-          p.then(() => {
-            audio.pause();
-            audio.currentTime = 0;
-          }).catch(() => {});
-        }
-      } catch (_) {}
+        const dummy = new Audio(audioConfig[key].path);
+        dummy.volume = 0.0;
+        dummy.play().then(() => { dummy.pause(); }).catch(() => {});
+      } catch(_) {}
     });
-
     document.removeEventListener("touchstart", unlockAudio, true);
     document.removeEventListener("click", unlockAudio, true);
   }
@@ -182,7 +165,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (score > highScore) { highScore = score; localStorage.setItem("highScore", score); }
   }
 
-  // إضافة مربع عشوائي
   function addRandom() {
     const empty = [];
     for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (board[r][c]===0) empty.push({r,c});
@@ -279,7 +261,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.stopBoardWatch) window.stopBoardWatch();
         if (messageEl) messageEl.textContent = boardFullMessages[Math.floor(Math.random()*boardFullMessages.length)];
         document.getElementById("gameOverPopup").style.display = "flex";
-        updatePopupButtons();
+        updatePopupButtons(); // تحديث فوري للحالة عند الخسارة
       }
     } else { combo = 0; if (comboBoxEl) comboBoxEl.style.display = "none"; }
   }
@@ -311,9 +293,9 @@ document.addEventListener("DOMContentLoaded", () => {
     timerInterval = setInterval(updateTimer, 1000);
   }
 
-  function handlePayAndStart() {
+  async function handlePayAndStart() {
     if (window.coinsManager && window.coinsManager.getCoins() >= 5) {
-      if (window.coinsManager.deductCoins(5)) { 
+      if (await window.coinsManager.deductCoins(5)) { 
         restartGame(); 
       }
     } else { 
@@ -324,7 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.restartGame = restartGame;
   window.handlePayAndStart = handlePayAndStart;
 
-  // إدارة الأزرار في الـ Popup مع شاشة منع اللعب المجاني عند الرصيد الصفري
+  // إصلاح التزامن وضمان عدم التحكم في الأزرار بشكل خاطئ أثناء انتظار التحميل
   function updatePopupButtons() {
     const payBtn = document.getElementById("popupButton");
     const freeBtn = document.getElementById("startFreeButton");
@@ -338,6 +320,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (freeBtn) freeBtn.style.display = "none";
       if (subtext) subtext.textContent = "مطلوب دفع 5 عملات لدخول الجولة";
     } else {
+      // رصيد اللاعب أقل من 5 عملات (نفدت العملات) -> نمنع اللعب المجاني تماماً
       if (payBtn) payBtn.style.display = "none";
       if (freeBtn) freeBtn.style.display = "none"; 
       if (subtext) subtext.textContent = "عذراً، ليس لديك عملات كافية لبدء جولة جديدة!";
@@ -352,6 +335,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   window.updatePopupButtons = updatePopupButtons;
 
+  // ربط أحداث الاستماع الفوري لتبديل وتحديث الأزرار عند حدوث تغيير بالعملات
   window.addEventListener("coinsChanged", updatePopupButtons);
 
   const payBtn = document.getElementById("popupButton");
@@ -376,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (currentCoins < 5) {
       alert("عذراً، ليس لديك عملات كافية!");
     } else {
-      restartGame();
+      handlePayAndStart(); // إجبار اللاعب على الدفع الفعلي بدلاً من الالتفاف المجاني
     }
   });
 
@@ -446,7 +430,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (window.stopBoardWatch) window.stopBoardWatch();
       if (messageEl) messageEl.textContent = timeOutMessages[Math.floor(Math.random()*timeOutMessages.length)];
       document.getElementById("gameOverPopup").style.display = "flex";
-      updatePopupButtons();
+      updatePopupButtons(); // تحديث فوري للحالة لمنع اللعب المجاني عند الخسارة بسبب الوقت
     }
   }
 
@@ -454,4 +438,3 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("gameOverPopup").style.display = "flex";
   updatePopupButtons();
 });
-
