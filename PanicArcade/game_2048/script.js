@@ -121,10 +121,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (timeLeft > maxStageTime) timeLeft = maxStageTime;
   }
 
-  function undoMove() {
+  async function undoMove() {
     if (!previousBoard) { alert("لا توجد حركة سابقة."); return; }
     if (!window.coinsManager || window.coinsManager.getCoins() < 10) { alert("تحتاج 10 عملات للتراجع."); return; }
-    if (!window.coinsManager.deductCoins(10)) return;
+    const success = await window.coinsManager.deductCoins(10);
+    if (!success) return;
     board = JSON.parse(JSON.stringify(previousBoard));
     score = previousScore; combo = 0;
     if (comboBoxEl) comboBoxEl.style.display = "none";
@@ -261,7 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.stopBoardWatch) window.stopBoardWatch();
         if (messageEl) messageEl.textContent = boardFullMessages[Math.floor(Math.random()*boardFullMessages.length)];
         document.getElementById("gameOverPopup").style.display = "flex";
-        updatePopupButtons(); // تحديث فوري للحالة عند الخسارة
+        updatePopupButtons();
       }
     } else { combo = 0; if (comboBoxEl) comboBoxEl.style.display = "none"; }
   }
@@ -295,7 +296,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function handlePayAndStart() {
     if (window.coinsManager && window.coinsManager.getCoins() >= 5) {
-      if (await window.coinsManager.deductCoins(5)) { 
+      const success = await window.coinsManager.deductCoins(5);
+      if (success) { 
         restartGame(); 
       }
     } else { 
@@ -306,7 +308,6 @@ document.addEventListener("DOMContentLoaded", () => {
   window.restartGame = restartGame;
   window.handlePayAndStart = handlePayAndStart;
 
-  // إصلاح التزامن وضمان عدم التحكم في الأزرار بشكل خاطئ أثناء انتظار التحميل
   function updatePopupButtons() {
     const payBtn = document.getElementById("popupButton");
     const freeBtn = document.getElementById("startFreeButton");
@@ -320,7 +321,6 @@ document.addEventListener("DOMContentLoaded", () => {
       if (freeBtn) freeBtn.style.display = "none";
       if (subtext) subtext.textContent = "مطلوب دفع 5 عملات لدخول الجولة";
     } else {
-      // رصيد اللاعب أقل من 5 عملات (نفدت العملات) -> نمنع اللعب المجاني تماماً
       if (payBtn) payBtn.style.display = "none";
       if (freeBtn) freeBtn.style.display = "none"; 
       if (subtext) subtext.textContent = "عذراً، ليس لديك عملات كافية لبدء جولة جديدة!";
@@ -335,7 +335,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   window.updatePopupButtons = updatePopupButtons;
 
-  // ربط أحداث الاستماع الفوري لتبديل وتحديث الأزرار عند حدوث تغيير بالعملات
   window.addEventListener("coinsChanged", updatePopupButtons);
 
   const payBtn = document.getElementById("popupButton");
@@ -355,12 +354,12 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   const startFreeBtn = document.getElementById("startFreeButton");
-  if (startFreeBtn) startFreeBtn.addEventListener("click", () => {
+  if (startFreeBtn) startFreeBtn.addEventListener("click", async () => {
     const currentCoins = (window.coinsManager && typeof window.coinsManager.getCoins === 'function') ? window.coinsManager.getCoins() : 0;
     if (currentCoins < 5) {
       alert("عذراً، ليس لديك عملات كافية!");
     } else {
-      handlePayAndStart(); // إجبار اللاعب على الدفع الفعلي بدلاً من الالتفاف المجاني
+      await handlePayAndStart();
     }
   });
 
@@ -430,7 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (window.stopBoardWatch) window.stopBoardWatch();
       if (messageEl) messageEl.textContent = timeOutMessages[Math.floor(Math.random()*timeOutMessages.length)];
       document.getElementById("gameOverPopup").style.display = "flex";
-      updatePopupButtons(); // تحديث فوري للحالة لمنع اللعب المجاني عند الخسارة بسبب الوقت
+      updatePopupButtons();
     }
   }
 
