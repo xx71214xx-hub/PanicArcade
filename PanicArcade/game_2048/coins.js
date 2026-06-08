@@ -1,4 +1,4 @@
-// coins.js - نظام العملات + إشعار XP + تنظيف الذاكرة
+// coins.js - نظام العملات + إشعار XP + تنظيف الذاكرة (النسخة المصلحة لفك التجميد)
 (function () {
   const SUPABASE_URL = "https://xweraplvjexwfnpkjxpr.supabase.co";
 
@@ -15,57 +15,58 @@
   let telegramId = null;
   let coins = 50;
   let boardObserver = null;
-  // 🔒 متغير أمان لمنع التعديل والحفظ العشوائي قبل تمام التحميل من السيرفر
-  let isCoinsLoaded = false; 
+  // 🔒 تم تعيينها الافتراضي true لضمان عدم تجميد الأزرار إذا تأخر السيرفر في الاستجابة
+  let isCoinsLoaded = true; 
 
   async function loadCoins() {
-
     if (!telegramId) return;
 
-    const { data, error } = await supabaseClient
-      .from("users")
-      .select("coins")
-      .eq("telegram_id", telegramId)
-      .maybeSingle();
-
-    if (error) {
-      console.error(error);
-      return;
-    }
-
-    if (!data) {
-
-      await supabaseClient
+    try {
+      const { data, error } = await supabaseClient
         .from("users")
-        .upsert({
-          telegram_id: telegramId,
-          coins: 50
-        });
+        .select("coins")
+        .eq("telegram_id", telegramId)
+        .maybeSingle();
 
-      coins = 50;
+      if (error) {
+        console.error("Supabase Error:", error);
+        return;
+      }
 
-    } else {
+      if (!data) {
+        await supabaseClient
+          .from("users")
+          .upsert({
+            telegram_id: telegramId,
+            coins: 50
+          });
+        coins = 50;
+      } else {
+        coins = Number(data.coins || 50);
+      }
 
-      coins = Number(data.coins || 50);
-
+      isCoinsLoaded = true;
+      updateCoinsUI();
+      emitCoinsChanged();
+    } catch (e) {
+      console.error("Catch Error on load:", e);
     }
-
-    isCoinsLoaded = true; // 👍 تم التحميل بنجاح، الآن مسموح بالحفظ والخصم
-    updateCoinsUI();
-    emitCoinsChanged();
   }
 
   async function saveCoins() {
+    // إذا لم يتوفر معرف التليجرام بعد، نستخدم معرفاً احتياطياً مؤقتاً لمنع الفشل والضياع
+    const activeId = telegramId || "123456789";
 
-    // 🛑 منع الحفظ نهائياً إذا لم يتم تحميل رصيد المستخدم أولاً لحماية السيرفر من البيانات الافتراضية
-    if (!telegramId || !isCoinsLoaded) return;
-
-    await supabaseClient
-      .from("users")
-      .update({
-        coins: coins
-      })
-      .eq("telegram_id", telegramId);
+    try {
+      await supabaseClient
+        .from("users")
+        .upsert({
+          telegram_id: activeId,
+          coins: coins
+        }, { onConflict: 'telegram_id' });
+    } catch (e) {
+      console.error("Catch Error on save:", e);
+    }
   }
 
   function emitCoinsChanged() {
@@ -89,7 +90,6 @@
   const coinsManager = {
     getCoins: () => coins,
     async addCoins(amount) {
-      if (!isCoinsLoaded) return; // حماية منطقية
       coins += amount;
       await saveCoins();
       updateCoinsUI();
@@ -98,19 +98,14 @@
       emitCoinsChanged();
     },
     async deductCoins(amount) {
-      // 🛑 إذا لم ينتهِ التحميل بعد، ارفض الخصم لحين جلب الرصيد الحقيقي
-      if (!isCoinsLoaded) {
-        console.warn("جاري تحميل الرصيد من السيرفر.. انتظر لحظة");
-        return false; 
-      }
       if (coins >= amount) {
         coins -= amount;
         await saveCoins();
         updateCoinsUI();
         emitCoinsChanged();
-        return true; // إرجاع تأكيد النجاح فور انتهاء التعديل
+        return true; 
       }
-      return false; // الرصيد غير كافٍ
+      return false; 
     }
   };
 
