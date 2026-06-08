@@ -108,9 +108,9 @@
         await saveCoins();
         updateCoinsUI();
         emitCoinsChanged();
-        return true;
+        return true; // إرجاع تأكيد النجاح فور انتهاء التعديل
       }
-      return false;
+      return false; // الرصيد غير كافٍ
     }
   };
 
