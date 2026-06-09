@@ -370,10 +370,3 @@ body.shake {
     transform: scale(0.95);
     background: rgba(102, 252, 241, 0.4);
 }
-/* تحسينات استقرار: منع السحب وانعكاس المتصفح */
-html, body { overscroll-behavior: none; touch-action: none; }
-
-/* XP في الشريط المصغر داخل اللعبة */
-#miniUserBar { padding: 4px 10px; background: rgba(31,40,51,.4); border-radius: 8px; border: 1px solid rgba(102,252,241,.15); }
-#miniUserXP { text-shadow: 0 0 6px rgba(255,215,0,.4); }
-

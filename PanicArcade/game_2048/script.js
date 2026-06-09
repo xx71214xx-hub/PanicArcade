@@ -1,443 +1,587 @@
-// script.js - منطق لعبة 2048 (النسخة الاحترافية المُصلَّحة بالكامل)
-document.addEventListener("DOMContentLoaded", () => {
+const SIZE = 4;
 
-  const SIZE = 4;
-  let board = [], score = 0, mergedTiles = new Set(), combo = 0;
-  let previousBoard = null, previousScore = 0;
-  let timeLeft = 20, maxStageTime = 20;
+let board = [];
+let score = 0; 
+let mergedTiles = new Set();
+let combo = 0; 
+let previousBoard = null;
+let previousScore = 0;
 
-  const boardEl = document.getElementById("board");
-  const scoreEl = document.getElementById("score");
-  const messageEl = document.getElementById("message");
-  const highScoreEl = document.getElementById("highScore");
-  const comboBoxEl = document.getElementById("comboBox");
-  const comboCountEl = document.getElementById("comboCount");
-  const timerElement = document.getElementById("panicTimer");
-  const progressBarEl = document.getElementById("timeProgressBar");
-  const stageLabelEl = document.getElementById("stageLabel");
+let timeLeft = 20; 
+let maxStageTime = 20; 
 
-  let highScore = parseInt(localStorage.getItem("highScore")) || 0;
-  let timerInterval = null;
-  let lastTickTime = Date.now();
-  let hasPlayedHighScoreSound = false;
-  let startX = 0, startY = 0;
-  let isMuted = false;
+const boardEl = document.getElementById("board");
+const scoreEl = document.getElementById("score");
+const messageEl = document.getElementById("message");
+const highScoreEl = document.getElementById("highScore");
+const comboBoxEl = document.getElementById("comboBox");
+const comboCountEl = document.getElementById("comboCount");
+const timerElement = document.getElementById("panicTimer");
+const progressBarEl = document.getElementById("timeProgressBar");
+const stageLabelEl = document.getElementById("stageLabel");
 
-  // إعدادات المؤثرات الصوتية
-  const audioConfig = {
-    merge:       { path: "sound_effects/merge.mp3", vol: 0.4 },
-    swipe:       { path: "sound_effects/swipe.mp3", vol: 0.2 },
-    ticking:     { path: "sound_effects/timeout_loss.mp3", vol: 0.5 },
-    boardFull:   { path: "sound_effects/board_full.mp3", vol: 0.5 },
-    timeoutLoss: { path: "sound_effects/timer_end.mp3", vol: 0.5 },
-    highscore:   { path: "sound_effects/highscore.mp3", vol: 0.5 },
-    win2048:     { path: "sound_effects/win_2048.mp3", vol: 0.6 }
-  };
+let highScore = parseInt(localStorage.getItem("highScore")) || 0;
+let timerInterval = null;
+let lastTickTime = Date.now(); 
+let hasPlayedHighScoreSound = false; 
 
-  let activeTickingAudio = null;
+let startX = 0;
+let startY = 0;
 
-  // دالة تشغيل الصوت الديناميكية الآمنة لتخطي قيود الجوال وتليجرام
-  function playSoundSafe(soundKey, rate = 1.0) {
-    if (isMuted) return;
-    try {
-      const config = audioConfig[soundKey];
-      if (!config) return;
+const audioFiles = {
+    merge: new Audio("Sound_effects/merge.mp3"),
+    swipe: new Audio("Sound_effects/swipe.mp3"),
+    ticking: new Audio("Sound_effects/timeout_loss.mp3"),
+    boardFull: new Audio("Sound_effects/board_full.mp3"),
+    timeoutLoss: new Audio("Sound_effects/Timer_End.mp3"),
+    highscore: new Audio("Sound_effects/highscore.mp3"),
+    win2048: new Audio("Sound_effects/win_2048.mp3")
+};
 
-      if (soundKey === 'ticking') {
-        if (!activeTickingAudio) {
-          activeTickingAudio = new Audio(config.path);
-          activeTickingAudio.volume = config.vol;
-          activeTickingAudio.loop = true;
-          activeTickingAudio.playbackRate = rate;
-          activeTickingAudio.play().catch(() => {});
-        } else {
-          activeTickingAudio.playbackRate = rate;
-        }
-        return;
-      }
+audioFiles.merge.volume = 0.4;
+audioFiles.swipe.volume = 0.2;
+audioFiles.ticking.volume = 0.5;
+audioFiles.boardFull.volume = 0.5;
+audioFiles.timeoutLoss.volume = 0.5;
+audioFiles.highscore.volume = 0.5;
+audioFiles.win2048.volume = 0.6;
 
-      const audioInstance = new Audio(config.path);
-      audioInstance.volume = config.vol;
-      audioInstance.playbackRate = rate;
-      
-      const p = audioInstance.play();
-      if (p && p.catch) {
-        p.catch(() => {});
-      }
-    } catch (_) {}
-  }
-
-  function stopTickingSound() {
-    if (activeTickingAudio) {
-      try {
-        activeTickingAudio.pause();
-        activeTickingAudio = null;
-      } catch (_) {}
-    }
-  }
-
-  // تفعيل وإجبار المتصفح على تفعيل شفرة الصوت فور أول تفاعل ملموس مع الشاشة
-  function unlockAudio() {
-    Object.keys(audioConfig).forEach(key => {
-      try {
-        const dummy = new Audio(audioConfig[key].path);
-        dummy.volume = 0.0;
-        dummy.play().then(() => { dummy.pause(); }).catch(() => {});
-      } catch(_) {}
+function unlockAudio() {
+    Object.values(audioFiles).forEach(sound => {
+        sound.play().then(() => {
+            sound.pause();
+            sound.currentTime = 0;
+        }).catch(err => console.log("تحضير الصوت..."));
     });
+    
     document.removeEventListener("touchstart", unlockAudio, true);
+    document.removeEventListener("touchend", unlockAudio, true);
+    document.removeEventListener("touchmove", unlockAudio, true);
     document.removeEventListener("click", unlockAudio, true);
-  }
-  document.addEventListener("touchstart", unlockAudio, true);
-  document.addEventListener("click", unlockAudio, true);
+}
+document.addEventListener("touchstart", unlockAudio, true);
+document.addEventListener("touchend", unlockAudio, true);
+document.addEventListener("touchmove", unlockAudio, true);
+document.addEventListener("click", unlockAudio, true);
 
-  // منع السحب الخارجي للمتصفح لثبات واجهة تليجرام المصغرة
-  document.addEventListener('touchmove', (e) => {
-    if (!e.target.closest('.game-board')) e.preventDefault();
-  }, { passive: false });
-  document.body.style.overscrollBehavior = 'none';
+const boardFullMessages = [
+    "🧠 عقلك حاصر نفسه بنفسه.. ركز شوي!", "🧱 قفلت على نفسك مثل الذكي.. صفقوا له!", 
+    "🫣 البورد انخنق من حركاتك العشوائية!", "📉 مهارات التخطيط عندك صفر.. ارجع للودو أفضل!",
+    "🥶 حركت القطع بدون تفكير لين قفلت الباب بوجهك!", "🤯 صدمة برمجية! كيف قفلتها كذا بسرعة؟", 
+    "🤫 البورد يطلب منك تفكر قبل ما تلمس الشاشة!", "🧠 الـ 2048 تحتاج عقل مو بس سرعة أصابع!", 
+    "🤷‍♂️ قفلت اللعبة؟ شكلك تبي تنتقم بالمرة الجاية.. اتحداك!", "🎯 اللعبة ذكاء وتخطيط.. مو خبط لزق!",
+    "💀 انتحار تكتيكي في منتصف البورد!", "🤡 قفلتها بجداره.. مبروك لقب ملك العشوائية!"
+];
 
-  const boardFullMessages = [
-    "🧠 عقلك حاصر نفسه بنفسه.. ركز شوي!","🧱 قفلت على نفسك!","🫣 البورد انخنق من حركاتك!",
-    "📉 مهارات التخطيط صفر!","🥶 حركت بدون تفكير!","🤯 صدمة برمجية!","🧠 الـ2048 تحتاج عقل!",
-    "🎯 اللعبة ذكاء وتخطيط!","💀 انتحار تكتيكي!","🤡 ملك العشوائية!"
-  ];
-  const timeOutMessages = [
-    "🐢 السلحفاة أسرع منك!","⏱️ العداد مات من الملل!","💀 الوقت مات بسبب بطئك!",
-    "⏰ الوقت ما ينتظر!","🚀 شغل المحركات!","⚡ السرعة هي المفتاح!"
-  ];
+const timeOutMessages = [
+    "🐢 السلحفاة حطمت رقمك القياسي بالسرعة!", "😴 نمت وأنت تفكر بالخطوة؟ الوقت ما ينتظر!",
+    "⏱️ العداد مات من الملل وأنت تتأمل البورد!", "💀 الوقت مات بسبب بطئك الشديد!",
+    "🥶 التفكير الزائد خلاك صنم لين صفر العداد!", "⏰ تيك توك.. الوقت مو لصالح الناس البطيئة!",
+    "🤦‍♂️ جلست تحسبها يمين ويسار لين طار الوقت!", "🔋 سرعتك تحتاج شحن.. الوقت خلص يا كابتن!",
+    "🚀 المرة الجاية شغل محركات الصاروخ.. بلاش برود!", "🤡 فكرت وفكرت وفكرت.. وفي النهاية خسرت بالوقت!", 
+    "⚡ السرعة هي المفتاح.. ارجع وفز بالسرعة!", "🏆 العب أسرع المرة الجاية واللقب لك بالتأكيد!"
+];
 
-  function init() {
-    board = Array.from({length:SIZE}, () => Array(SIZE).fill(0));
-    score = 0; combo = 0; hasPlayedHighScoreSound = false;
-    previousBoard = null; previousScore = 0;
-    addRandom(); addRandom(); render();
-  }
+function init() {
+    board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
+    score = 0;
+    combo = 0;
+    hasPlayedHighScoreSound = false;
+    previousBoard = null;
+    previousScore = 0;
+    
+    addRandom();
+    addRandom();
+    render();
+}
 
-  function checkAndSetStage() {
-    if (score <= 1000) { maxStageTime = 20; if(stageLabelEl){stageLabelEl.textContent="المرحلة العادية";stageLabelEl.style.color="#66FCF1";}}
-    else if (score <= 3000) { maxStageTime = 15; if(stageLabelEl){stageLabelEl.textContent="المرحلة المتقدمة";stageLabelEl.style.color="#ffd900";}}
-    else { maxStageTime = 10; if(stageLabelEl){stageLabelEl.textContent="جنون فائق ⚡";stageLabelEl.style.color="#ff0055";}}
-    if (timeLeft > maxStageTime) timeLeft = maxStageTime;
-  }
-
-  async function undoMove() {
-    if (!previousBoard) { alert("لا توجد حركة سابقة."); return; }
-    if (!window.coinsManager || window.coinsManager.getCoins() < 10) { alert("تحتاج 10 عملات للتراجع."); return; }
-    const success = await window.coinsManager.deductCoins(10);
-    if (!success) return;
-    board = JSON.parse(JSON.stringify(previousBoard));
-    score = previousScore; combo = 0;
-    if (comboBoxEl) comboBoxEl.style.display = "none";
-    render(); previousBoard = null;
-  }
-
-  function render() {
-    boardEl.innerHTML = "";
-    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
-      const v = board[r][c];
-      const t = document.createElement("div");
-      t.className = "tile n" + v;
-      if (mergedTiles.has(`${r}-${c}`)) t.classList.add("merge");
-      t.textContent = v || "";
-      boardEl.appendChild(t);
+function checkAndSetStage() {
+    if (score <= 1000) {
+        maxStageTime = 20;
+        if(stageLabelEl) {
+            stageLabelEl.textContent = "المرحلة العادية";
+            stageLabelEl.style.color = "#66FCF1";
+        }
+    } else if (score > 1000 && score <= 3000) {
+        maxStageTime = 15;
+        if(stageLabelEl) {
+            stageLabelEl.textContent = "المرحلة المتقدمة";
+            stageLabelEl.style.color = "#ffd900";
+        }
+    } else {
+        maxStageTime = 10;
+        if(stageLabelEl) {
+            stageLabelEl.textContent = "جنون فائق ⚡";
+            stageLabelEl.style.color = "#ff0055";
+        }
     }
+
+    if (timeLeft > maxStageTime) {
+        timeLeft = maxStageTime;
+    }
+}
+
+function undoMove() {
+    if (!previousBoard) {
+        alert("لا توجد حركة سابقة للتراجع عنها.");
+        return;
+    }
+    if (!window.coinsManager) {
+        alert("نظام العملات غير متوفر.");
+        return;
+    }
+    if (window.coinsManager.getCoins() < 10) {
+        alert("لا تملك 10 عملات للتراجع.");
+        return;
+    }
+    const success = window.coinsManager.deductCoins(10);
+    if (!success) {
+        alert("لا تملك عملات كافية.");
+        return;
+    }
+    board = JSON.parse(JSON.stringify(previousBoard));
+    score = previousScore;
+    combo = 0; // تصفير الكومبو لحماية عدالة اللعب
+    if(comboBoxEl) comboBoxEl.style.display = "none";
+    
+    render();
+    previousBoard = null;
+}
+
+function render(){
+    boardEl.innerHTML = "";
+    for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+            const value = board[r][c];
+            const tile = document.createElement("div");
+            tile.className = "tile n" + value;
+            if(mergedTiles.has(`${r}-${c}`)){
+                tile.classList.add("merge");
+            }
+            tile.textContent = value || "";
+            boardEl.appendChild(tile);
+        }
+    }
+    
     scoreEl.textContent = score;
-    const sBox = scoreEl.closest('.score-box');
-    const hBox = highScoreEl.closest('.score-box');
+    const scoreBox = scoreEl.closest('.score-box');
+    const highScoreBox = highScoreEl.closest('.score-box');
+
     if (highScoreEl) highScoreEl.textContent = highScore;
 
     if (score > highScore && highScore > 0) {
-      sBox && sBox.classList.add("score-leader");
-      hBox && hBox.classList.add("score-defeated");
-      if (!hasPlayedHighScoreSound) {
-        hasPlayedHighScoreSound = true;
-        document.body.classList.add("celebration-flash");
-        setTimeout(()=>document.body.classList.remove("celebration-flash"),600);
-        playSoundSafe('highscore');
-      }
+        scoreBox.classList.add("score-leader");
+        highScoreBox.classList.add("score-defeated");
+
+        if (!hasPlayedHighScoreSound) {
+            hasPlayedHighScoreSound = true;
+            document.body.classList.add("celebration-flash");
+            setTimeout(() => {
+                document.body.classList.remove("celebration-flash");
+            }, 600);
+            audioFiles.highscore.currentTime = 0;
+            audioFiles.highscore.play().catch(e => console.log(e));
+        }
     } else {
-      sBox && sBox.classList.remove("score-leader");
-      hBox && hBox.classList.remove("score-defeated");
+        if(scoreBox) scoreBox.classList.remove("score-leader");
+        if(highScoreBox) highScoreBox.classList.remove("score-defeated");
     }
-  }
+}
 
-  function handleEndGameHighScore() {
-    if (score > highScore) { highScore = score; localStorage.setItem("highScore", score); }
-  }
+function handleEndGameHighScore() {
+    if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("highScore", score);
+    }
+}
 
-  function addRandom() {
+function addRandom(){
     const empty = [];
-    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) if (board[r][c]===0) empty.push({r,c});
-    if (!empty.length) return;
+    for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+            if(board[r][c] === 0){
+                empty.push({r,c});
+            }
+        }
+    }
+    if(empty.length === 0) return;
     const {r,c} = empty[Math.floor(Math.random()*empty.length)];
     board[r][c] = Math.random() < 0.9 ? 2 : 4;
     render();
-    setTimeout(()=>{ mergedTiles.clear(); boardEl.querySelectorAll('.tile').forEach(t=>t.classList.remove('merge')); }, 220);
-  }
 
-  function rotateCoordsClockwise(r,c,rot) {
-    let R=r,C=c;
-    for(let i=0;i<rot;i++){ const nR=C, nC=SIZE-1-R; R=nR; C=nC; }
-    return {r:R,c:C};
-  }
+    setTimeout(() => {
+        mergedTiles.clear();
+        const tiles = boardEl.querySelectorAll('.tile');
+        tiles.forEach(tile => tile.classList.remove('merge'));
+    }, 220); 
+}
 
-  function moveLeft() {
-    let changed=false, localMerges=[], hasMergedInThisMove=false;
-    for (let r=0;r<SIZE;r++) {
-      const oldRow = [...board[r]];
-      const row = board[r].filter(v=>v);
-      const newRow = []; let targetCol = 0;
-      for (let i=0;i<row.length;i++) {
-        if (i < row.length-1 && row[i] === row[i+1]) {
-          const m = row[i]*2; score += m; newRow.push(m);
-          localMerges.push({r, c: targetCol}); hasMergedInThisMove = true; i++;
-        } else { newRow.push(row[i]); }
-        targetCol++;
-      }
-      while (newRow.length < SIZE) newRow.push(0);
-      board[r] = newRow;
-      if (oldRow.toString() !== newRow.toString()) changed = true;
+function rotateCoordsClockwise(r, c, rotations) {
+    let currR = r;
+    let currC = c;
+    for (let i = 0; i < rotations; i++) {
+        let nextR = currC;
+        let nextC = SIZE - 1 - currR;
+        currR = nextR;
+        currC = nextC;
+    }
+    return { r: currR, c: currC };
+}
+
+function moveLeft(){
+    let changed = false;
+    let localMerges = [];
+    let hasMergedInThisMove = false;
+
+    for(let r = 0; r < SIZE; r++){
+        let oldRow = [...board[r]];
+        let row = board[r].filter(v => v);
+        let newRow = [];
+        let targetCol = 0;
+
+        for(let i = 0; i < row.length; i++){
+            if(i < row.length - 1 && row[i] === row[i + 1]){
+                let mergedValue = row[i] * 2;
+                score += mergedValue;
+                newRow.push(mergedValue);
+                localMerges.push({r: r, c: targetCol});
+                hasMergedInThisMove = true; 
+                i++;
+            }else{
+                newRow.push(row[i]);
+            }
+            targetCol++;
+        }
+        while(newRow.length < SIZE){
+            newRow.push(0);
+        }
+        board[r] = newRow;
+        if(oldRow.toString() !== newRow.toString()){
+            changed = true;
+        }
     }
     return { changed, localMerges, hasMergedInThisMove };
-  }
+}
 
-  function rotateClockwise(m) {
-    const out = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
-    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) out[c][SIZE-1-r] = m[r][c];
-    return out;
-  }
+function rotateClockwise(matrix){
+    const result = Array.from({length:SIZE}, () => Array(SIZE).fill(0));
+    for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+            result[c][SIZE-1-r] = matrix[r][c];
+        }
+    }
+    return result;
+}
 
-  function move(direction) {
-    if (document.getElementById("gameOverPopup").style.display === "flex" || !timerInterval) return;
-    const snap = JSON.parse(JSON.stringify(board));
-    const snapScore = score;
-    const rotations = { left:0, up:3, right:2, down:1 }[direction];
-    for (let i=0;i<rotations;i++) board = rotateClockwise(board);
+function move(direction){
+    if(document.getElementById("gameOverPopup").style.display === "flex" || !timerInterval) return;
+
+    const boardSnapshot = JSON.parse(JSON.stringify(board));
+    const scoreSnapshot = score;
+
+    let rotations = { left: 0, up: 3, right: 2, down: 1 }[direction];
+    for(let i=0; i<rotations; i++){ board = rotateClockwise(board); }
+
     const moveResult = moveLeft();
-    const postRotations = (4 - rotations) % 4;
-    for (let i=0;i<postRotations;i++) board = rotateClockwise(board);
+    const changed = moveResult.changed;
+    const isMerged = moveResult.hasMergedInThisMove;
+    let postRotations = (4 - rotations) % 4;
 
-    if (moveResult.changed) {
-      previousBoard = snap; previousScore = snapScore;
-      checkAndSetStage();
+    for(let i=0; i < postRotations; i++){ board = rotateClockwise(board); }
 
-      if (moveResult.hasMergedInThisMove) {
-        if (window.navigator.vibrate) {
-          window.navigator.vibrate(combo >= 3 ? [40,30,40] : [25]);
+    if(changed){
+        previousBoard = boardSnapshot;
+        previousScore = scoreSnapshot;
+        checkAndSetStage();
+
+        if(isMerged){
+            // --- ميزة اهتزاز الهاتف اللمسي (Haptic Feedback) دون تغيير أي شيء آخر ---
+            if (window.navigator && window.navigator.vibrate) {
+                let vibratePattern = combo >= 3 ? [40, 30, 40] : [25];
+                window.navigator.vibrate(vibratePattern);
+            }
+            // -------------------------------------------------------------------
+
+            combo++;
+            let addedTime = Math.min(combo, 4);
+            timeLeft = Math.min(timeLeft + addedTime, maxStageTime);
+
+            if(combo >= 2){ score += (combo * 10); }
+            if (combo >= 5 && combo % 2 === 0) {
+                if (Math.random() < 0.50 && window.coinsManager) { window.coinsManager.addCoins(2); }
+            }
+            audioFiles.merge.playbackRate = 1 + (combo * 0.12);
+            audioFiles.merge.currentTime = 0;
+            audioFiles.merge.play().catch(err => console.log(err));
+        } else {
+            combo = 0;
+            audioFiles.swipe.currentTime = 0;
+            audioFiles.swipe.play().catch(err => console.log(err));
         }
-        combo++;
-        const addedTime = Math.min(combo, 4);
-        timeLeft = Math.min(timeLeft + addedTime, maxStageTime);
-        if (combo >= 2) score += (combo * 10);
-        if (combo >= 5 && combo % 2 === 0 && Math.random() < 0.5 && window.coinsManager) {
-          window.coinsManager.addCoins(2);
+
+        if(combo >= 2) {
+            if(comboCountEl) comboCountEl.textContent = "X" + combo + " 🔥";
+            if(comboBoxEl) comboBoxEl.style.display = "block";
+        } else {
+            if(comboBoxEl) comboBoxEl.style.display = "none";
         }
-        const mRate = 1 + combo * 0.12;
-        playSoundSafe('merge', mRate);
-      } else {
+
+        mergedTiles.clear();
+        moveResult.localMerges.forEach(merged => {
+            let finalCoords = rotateCoordsClockwise(merged.r, merged.c, postRotations);
+            mergedTiles.add(`${finalCoords.r}-${finalCoords.c}`);
+        });
+
+        addRandom();
+        render();
+
+        if(checkWin()){
+            audioFiles.win2048.play().catch(e => {});
+            if(messageEl){ messageEl.textContent = "🎉 أسطورة! لقد صنعت مربع 2048!"; }
+        } else if(checkGameOver()){
+            clearInterval(timerInterval);
+            timerInterval = null;
+            handleEndGameHighScore();
+            audioFiles.ticking.pause();
+            audioFiles.boardFull.currentTime = 0;
+            audioFiles.boardFull.play().catch(e => {});
+
+            const randomMessage = boardFullMessages[Math.floor(Math.random() * boardFullMessages.length)];
+            if(messageEl){ messageEl.textContent = randomMessage; }
+            document.getElementById("gameOverPopup").style.display = "flex";
+        }
+    } else {
         combo = 0;
-        playSoundSafe('swipe');
-      }
+        if(comboBoxEl){ comboBoxEl.style.display = "none"; }
+    }
+}
 
-      if (combo >= 2) { if(comboCountEl) comboCountEl.textContent="X"+combo+" 🔥"; if(comboBoxEl) comboBoxEl.style.display="block"; }
-      else { if(comboBoxEl) comboBoxEl.style.display="none"; }
 
-      mergedTiles.clear();
-      moveResult.localMerges.forEach(mg => {
-        const f = rotateCoordsClockwise(mg.r, mg.c, postRotations);
-        mergedTiles.add(`${f.r}-${f.c}`);
-      });
+function checkWin(){
+    for(let row of board){ if(row.includes(2048)) return true; }
+    return false;
+}
 
-      addRandom(); render();
-
-      if (checkWin()) {
-        playSoundSafe('win2048');
-        if (messageEl) messageEl.textContent = "🎉 أسطورة! صنعت 2048!";
-      } else if (checkGameOver()) {
-        clearInterval(timerInterval); timerInterval = null;
-        handleEndGameHighScore();
-        stopTickingSound();
-        playSoundSafe('boardFull');
-        if (window.stopBoardWatch) window.stopBoardWatch();
-        if (messageEl) messageEl.textContent = boardFullMessages[Math.floor(Math.random()*boardFullMessages.length)];
-        document.getElementById("gameOverPopup").style.display = "flex";
-        updatePopupButtons();
-      }
-    } else { combo = 0; if (comboBoxEl) comboBoxEl.style.display = "none"; }
-  }
-
-  function checkWin(){ for (const r of board) if (r.includes(2048)) return true; return false; }
-  function checkGameOver(){
-    for (let r=0;r<SIZE;r++) for (let c=0;c<SIZE;c++) {
-      if (board[r][c]===0) return false;
-      if (c<SIZE-1 && board[r][c]===board[r][c+1]) return false;
-      if (r<SIZE-1 && board[r][c]===board[r+1][c]) return false;
+function checkGameOver(){
+    for(let r=0;r<SIZE;r++){
+        for(let c=0;c<SIZE;c++){
+            if(board[r][c] === 0) return false;
+            if(c < SIZE-1 && board[r][c] === board[r][c+1]) return false;
+            if(r < SIZE-1 && board[r][c] === board[r+1][c]) return false;
+        }
     }
     return true;
-  }
+}
 
-  function restartGame() {
-    if (timerInterval) clearInterval(timerInterval);
+function restartGame(){
+    if (timerInterval) { clearInterval(timerInterval); }
     document.getElementById("gameOverPopup").style.display = "none";
     document.body.classList.remove("shake");
-    if (timerElement) { timerElement.style.background="#66FCF1"; timerElement.classList.remove("timerDanger"); }
-    if (progressBarEl) { progressBarEl.style.background="#66FCF1"; progressBarEl.style.boxShadow="0 0 8px #66FCF1"; }
-    const overlay = document.getElementById("dangerOverlay"); if (overlay) overlay.classList.remove("panicFlash");
-    stopTickingSound();
+    
+    if(timerElement) {
+        timerElement.style.background = "#66FCF1";
+        timerElement.classList.remove("timerDanger");
+    }
+    if(progressBarEl) {
+        progressBarEl.style.background = "#66FCF1";
+        progressBarEl.style.boxShadow = "0 0 8px #66FCF1";
+    }
+    const overlay = document.getElementById("dangerOverlay");
+    if(overlay) overlay.classList.remove("panicFlash");
+
+    audioFiles.timeoutLoss.pause();
+    audioFiles.boardFull.pause();
+    audioFiles.ticking.pause();
+
     init();
-    if (window.rewardedTiles) window.rewardedTiles.clear();
+    if (window.rewardedTiles) { window.rewardedTiles.clear(); }
     checkAndSetStage();
-    timeLeft = maxStageTime;
-    if (messageEl) messageEl.textContent = "";
+    timeLeft = maxStageTime; 
+    if(messageEl) messageEl.textContent = "";
+    
     lastTickTime = Date.now();
     timerInterval = setInterval(updateTimer, 1000);
-  }
+}
 
-  async function handlePayAndStart() {
-    if (window.coinsManager && window.coinsManager.getCoins() >= 5) {
-      // 🔒 إصلاح الانتظار لعدم حدوث تجميد ولإرسال البيانات الصحيحة للسيرفر فوراً
-      const success = await window.coinsManager.deductCoins(5);
-      if (success) { 
-        restartGame(); 
-      }
-    } else { 
-      alert("ليس لديك عملات كافية لدخول الجولة!"); 
-    }
-  }
+function handlePayAndStart() {
+    if (window.coinsManager && typeof window.coinsManager.deductCoins === "function") {
+        let success = window.coinsManager.deductCoins(5);
+        if (success) { restartGame(); } else { alert("عذراً، لا تملك عملات كافية للعب!"); }
+    } else { restartGame(); }
+}
 
-  window.restartGame = restartGame;
-  window.handlePayAndStart = handlePayAndStart;
+window.restartGame = restartGame;
+window.handlePayAndStart = handlePayAndStart;
 
-  function updatePopupButtons() {
+document.addEventListener("DOMContentLoaded", () => {
     const payBtn = document.getElementById("popupButton");
-    const freeBtn = document.getElementById("startFreeButton");
-    const subtext = document.getElementById("popupSubtext");
-    const dailyBtn = document.getElementById("popupDailyBtn");
+    if(payBtn) { payBtn.addEventListener("click", handlePayAndStart); }
 
-    const currentCoins = (window.coinsManager && typeof window.coinsManager.getCoins === 'function') ? window.coinsManager.getCoins() : 0;
+    const undoBtn = document.getElementById("undoBtn");
+    if (undoBtn) { undoBtn.addEventListener("click", undoMove); }
 
-    if (currentCoins >= 5) {
-      if (payBtn) payBtn.style.display = "inline-block";
-      if (freeBtn) freeBtn.style.display = "none";
-      if (subtext) subtext.textContent = "مطلوب دفع 5 عملات لدخول الجولة";
-    } else {
-      if (payBtn) payBtn.style.display = "none";
-      if (freeBtn) freeBtn.style.display = "none"; 
-      if (subtext) subtext.textContent = "عذراً، ليس لديك عملات كافية لبدء جولة جديدة!";
+    const restartBtn = document.getElementById("restartBtn");
+    if (restartBtn) {
+        restartBtn.addEventListener("click", () => {
+            if(confirm("هل أنت متأكد من رغبتك في إعادة تشغيل الجولة الحالية؟")) { restartGame(); }
+        });
     }
 
-    const lastClaim = localStorage.getItem("lastDailyClaim");
-    const oneDay = 24*60*60*1000;
-    if (dailyBtn) {
-      const canClaim = !lastClaim || (Date.now() - parseInt(lastClaim) >= oneDay);
-      dailyBtn.style.display = canClaim ? "inline-block" : "none";
+    let isMuted = false;
+    const soundToggleBtn = document.getElementById("soundToggleBtn");
+    if (soundToggleBtn) {
+        soundToggleBtn.addEventListener("click", () => {
+            isMuted = !isMuted;
+            Object.values(audioFiles).forEach(sound => { sound.muted = isMuted; });
+            soundToggleBtn.querySelector('.btn-icon').textContent = isMuted ? "🔇" : "🔊";
+        });
     }
-  }
-  window.updatePopupButtons = updatePopupButtons;
+    updatePopupButtons();
+});
 
-  window.addEventListener("coinsChanged", updatePopupButtons);
-
-  const payBtn = document.getElementById("popupButton");
-  if (payBtn) payBtn.addEventListener("click", handlePayAndStart);
-  const undoBtn = document.getElementById("undoBtn");
-  if (undoBtn) undoBtn.addEventListener("click", undoMove);
-  const restartBtn = document.getElementById("restartBtn");
-  if (restartBtn) restartBtn.addEventListener("click", () => {
-    if (confirm("هل أنت متأكد من إعادة تشغيل الجولة؟")) restartGame();
-  });
-
-  const soundToggleBtn = document.getElementById("soundToggleBtn");
-  if (soundToggleBtn) soundToggleBtn.addEventListener("click", () => {
-    isMuted = !isMuted;
-    if (isMuted) stopTickingSound();
-    soundToggleBtn.querySelector('.btn-icon').textContent = isMuted ? "🔇" : "🔊";
-  });
-
-  const startFreeBtn = document.getElementById("startFreeButton");
-  if (startFreeBtn) {
-    // 🔒 تحويل الحدث لمستقبل متزامن لضمان الخصم وبدء اللعبة
-    startFreeBtn.addEventListener("click", async () => {
-      const currentCoins = (window.coinsManager && typeof window.coinsManager.getCoins === 'function') ? window.coinsManager.getCoins() : 0;
-      if (currentCoins < 5) {
-        alert("عذراً، ليس لديك عملات كافية!");
-      } else {
-        await handlePayAndStart();
-      }
-    });
-  }
-
-  document.addEventListener("keydown", e => {
+document.addEventListener("keydown", e => {
     switch(e.key){
-      case "ArrowLeft": move("left"); break;
-      case "ArrowRight": move("right"); break;
-      case "ArrowUp": move("up"); break;
-      case "ArrowDown": move("down"); break;
+        case "ArrowLeft": move("left"); break;
+        case "ArrowRight": move("right"); break;
+        case "ArrowUp": move("up"); break;
+        case "ArrowDown": move("down"); break;
     }
-  });
+});
 
-  document.addEventListener("touchstart", e => {
-    startX = e.touches[0].clientX; startY = e.touches[0].clientY;
-  }, { passive: true });
+document.addEventListener("touchstart", e => {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+}, { passive: true });
 
-  document.addEventListener("touchend", e => {
+document.addEventListener("touchend", e => {
     if (!startX || !startY) return;
     const dx = e.changedTouches[0].clientX - startX;
     const dy = e.changedTouches[0].clientY - startY;
-    if (Math.abs(dx) > Math.abs(dy)) { if (dx > 40) move("right"); else if (dx < -40) move("left"); }
-    else { if (dy > 40) move("down"); else if (dy < -40) move("up"); }
-    startX = 0; startY = 0;
-  }, { passive: true });
 
-  function updateTimer() {
-    if (!timerElement) return;
+    if (Math.abs(dx) > Math.abs(dy)) {
+        if (dx > 40) move("right"); else if (dx < -40) move("left");
+    } else {
+        if (dy > 40) move("down"); else if (dy < -40) move("up");
+    }
+    startX = 0; startY = 0;
+}, { passive: true });
+
+function updateTimer(){
+    if(!timerElement) return;
     const now = Date.now();
-    const elapsed = Math.floor((now - lastTickTime) / 1000);
-    if (elapsed >= 1) { timeLeft -= elapsed; lastTickTime += elapsed * 1000; }
-    const display = timeLeft < 0 ? 0 : timeLeft;
-    timerElement.innerHTML = "⏳ " + display;
-    if (progressBarEl) progressBarEl.style.width = Math.min((display/maxStageTime)*100, 100) + "%";
+    const elapsedSeconds = Math.floor((now - lastTickTime) / 1000);
+
+    if (elapsedSeconds >= 1) {
+        timeLeft -= elapsedSeconds;
+        lastTickTime += elapsedSeconds * 1000; 
+    }
+
+    let displayTime = timeLeft < 0 ? 0 : timeLeft;
+    timerElement.innerHTML = "⏳ " + displayTime;
+
+    if (progressBarEl) {
+        let percentage = Math.min((displayTime / maxStageTime) * 100, 100);
+        progressBarEl.style.width = percentage + "%";
+    }
 
     const overlay = document.getElementById("dangerOverlay");
-    const danger = maxStageTime === 10 ? 3 : 5;
+    let dangerThreshold = maxStageTime === 10 ? 3 : 5; 
 
-    if (timeLeft <= danger && timeLeft > 0) {
-      timerElement.style.background = "#FF0055";
-      if (progressBarEl) { progressBarEl.style.background="#FF0055"; progressBarEl.style.boxShadow="0 0 10px #FF0055"; }
-      document.body.classList.add("shake");
-      timerElement.classList.add("timerDanger");
-      if (overlay) overlay.classList.add("panicFlash");
-      const tRate = maxStageTime === 10 ? 1.5 : 1.0;
-      playSoundSafe('ticking', tRate);
+    if(timeLeft <= dangerThreshold && timeLeft > 0){
+        timerElement.style.background = "#FF0055";
+        if(progressBarEl) {
+            progressBarEl.style.background = "#FF0055";
+            progressBarEl.style.boxShadow = "0 0 10px #FF0055";
+        }
+        document.body.classList.add("shake");
+        timerElement.classList.add("timerDanger");
+        if(overlay) overlay.classList.add("panicFlash");
+
+        audioFiles.ticking.playbackRate = maxStageTime === 10 ? 1.5 : 1.0;
+        audioFiles.ticking.play().catch(err => console.log(err));
     }
 
-    if (timeLeft > danger) {
-      if (maxStageTime === 10) {
-        timerElement.style.background = "#ff5500";
-        if (progressBarEl) { progressBarEl.style.background="#ff5500"; progressBarEl.style.boxShadow="0 0 8px #ff5500"; }
-      } else {
-        timerElement.style.background = "#66FCF1";
-        if (progressBarEl) { progressBarEl.style.background="#66FCF1"; progressBarEl.style.boxShadow="0 0 8px #66FCF1"; }
-      }
-      document.body.classList.remove("shake");
-      timerElement.classList.remove("timerDanger");
-      if (overlay) overlay.classList.remove("panicFlash");
-      stopTickingSound();
+    if(timeLeft > dangerThreshold || (maxStageTime === 10 && timeLeft > 3)){
+        if(maxStageTime === 10) {
+            timerElement.style.background = "#ff5500";
+            if(progressBarEl) {
+                progressBarEl.style.background = "#ff5500";
+                progressBarEl.style.boxShadow = "0 0 8px #ff5500";
+            }
+        } else {
+            timerElement.style.background = "#66FCF1";
+            if(progressBarEl) {
+                progressBarEl.style.background = "#66FCF1";
+                progressBarEl.style.boxShadow = "0 0 8px #66FCF1";
+            }
+        }
+        document.body.classList.remove("shake");
+        timerElement.classList.remove("timerDanger");
+        if(overlay) overlay.classList.remove("panicFlash");
+
+        if (timeLeft > dangerThreshold) { audioFiles.ticking.pause(); }
     }
 
-    if (timeLeft <= 0) {
-      clearInterval(timerInterval); timerInterval = null;
-      handleEndGameHighScore();
-      stopTickingSound();
-      playSoundSafe('timeoutLoss');
-      if (window.stopBoardWatch) window.stopBoardWatch();
-      if (messageEl) messageEl.textContent = timeOutMessages[Math.floor(Math.random()*timeOutMessages.length)];
-      document.getElementById("gameOverPopup").style.display = "flex";
-      updatePopupButtons();
-    }
-  }
+    if(timeLeft <= 0){
+        clearInterval(timerInterval);
+        timerInterval = null;
+        handleEndGameHighScore();
+        audioFiles.ticking.pause();
+        audioFiles.timeoutLoss.currentTime = 0;
+        audioFiles.timeoutLoss.play().catch(e => {});
 
-  init();
-  document.getElementById("gameOverPopup").style.display = "flex";
-  updatePopupButtons();
-});
+        const randomMessage = timeOutMessages[Math.floor(Math.random() * timeOutMessages.length)];
+        if(messageEl) messageEl.textContent = randomMessage;
+        document.getElementById("gameOverPopup").style.display = "flex";
+        return;
+    }
+}
+
+init();
+document.getElementById("gameOverPopup").style.display = "flex";
+
+const startFreeBtn = document.getElementById("startFreeButton");
+if (startFreeBtn) { startFreeBtn.addEventListener("click", restartGame); }
+
+function updatePopupButtons() {
+    const payBtn = document.getElementById("popupButton");
+    const startFreeBtn = document.getElementById("startFreeButton");
+    const popupSubtext = document.getElementById("popupSubtext");
+    const popupDailyBtn = document.getElementById("popupDailyBtn");
+
+    if (window.coinsManager && window.coinsManager.getCoins() >= 5) {
+        if (payBtn) payBtn.style.display = "inline-block";
+        if (startFreeBtn) startFreeBtn.style.display = "none";
+        if (popupSubtext) popupSubtext.textContent = "مطلوب دفع 5 عملات لدخول الجولة";
+    } else {
+        if (payBtn) payBtn.style.display = "none";
+        if (startFreeBtn) startFreeBtn.style.display = "inline-block";
+        if (popupSubtext) popupSubtext.textContent = "يمكنك بدء اللعب مجاناً الآن أو استلام مكافأتك اليومية";
+    }
+
+    // التحكم بظهور زر المكافأة اليومية داخل البوب آب بناءً على الـ localStorage
+    const lastClaim = localStorage.getItem("lastDailyClaim");
+    const oneDay = 24 * 60 * 60 * 1000;
+    if (popupDailyBtn) {
+        if (lastClaim && (Date.now() - parseInt(lastClaim) < oneDay)) {
+            popupDailyBtn.style.display = "none";
+        } else {
+            popupDailyBtn.style.display = "inline-block";
+        }
+    }
+}
+window.updatePopupButtons = updatePopupButtons;
+
+if (window.coinsManager) {
+    const originalAddCoins = window.coinsManager.addCoins;
+    window.coinsManager.addCoins = function(amount) {
+        originalAddCoins.call(this, amount);
+        updatePopupButtons();
+    };
+    const originalDeductCoins = window.coinsManager.deductCoins;
+    window.coinsManager.deductCoins = function(amount) {
+        const result = originalDeductCoins.call(this, amount);
+        updatePopupButtons();
+        return result;
+    };
+}
