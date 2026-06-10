@@ -1,3 +1,5 @@
+// src/api/economy.js
+
 import { supabase } from './supabaseClient.js';
 
 export const EconomyAPI = {
