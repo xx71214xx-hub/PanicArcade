@@ -1,8 +1,20 @@
+// src/api/auth.js
+
 import { supabase } from './supabaseClient.js';
 
 export async function authenticateTelegramUser() {
     const tg = window.Telegram?.WebApp;
-    const initData = tg?.initData;
+    
+    // 1. محاولة جلب البيانات بالطريقة العادية، وإن لم توجد يسحبها من الرابط المحول من الـ Hub
+    let initData = tg?.initData;
+    
+    if (!initData) {
+        const urlParams = new URLSearchParams(window.location.search);
+        const paramData = urlParams.get('tgWebAppStartParam');
+        if (paramData) {
+            initData = decodeURIComponent(paramData);
+        }
+    }
 
     if (!initData) {
         console.error("❌ لم يتم العثور على بيانات تليجرام. تأكد من فتح اللعبة داخل تليجرام.");
