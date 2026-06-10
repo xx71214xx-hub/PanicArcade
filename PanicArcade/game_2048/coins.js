@@ -3,23 +3,36 @@ import { supabase } from '../src/api/supabaseClient.js';
 
 (function() {
     // 1. تهيئة الرصيد من السيرفر بدلاً من الـ LocalStorage
-    let coins = 50; 
+    let coins = 0; 
     let nextDailyClaimTime = null;
 
     async function initCoinsFromServer() {
         try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('coins_balance')
-                .single();
+            // التحقق أولاً من وجود مستخدم مسجل بالذاكرة جلبته دالة المصادقة
+            const tgUser = window.currentUser;
+            let query = supabase.from('users').select('coins_balance');
+            
+            if (tgUser && tgUser.tg_id) {
+                query = query.eq('tg_id', tgUser.tg_id);
+            }
+            
+            const { data, error } = await query.maybeSingle();
 
             if (error) throw error;
             if (data) {
                 coins = data.coins_balance;
-                updateCoinsUI();
+            } else if (tgUser && tgUser.coins_balance !== undefined) {
+                coins = tgUser.coins_balance;
+            } else {
+                coins = 50; // رصيد افتراضي احتياطي
             }
+            updateCoinsUI();
         } catch (error) {
             console.error("❌ خطأ في جلب الرصيد من السيرفر:", error);
+            if (window.currentUser && window.currentUser.coins_balance !== undefined) {
+                coins = window.currentUser.coins_balance;
+                updateCoinsUI();
+            }
         }
     }
 
@@ -28,12 +41,19 @@ import { supabase } from '../src/api/supabaseClient.js';
         if (coinsBalanceEl) {
             coinsBalanceEl.textContent = coins;
         }
+        if (window.updatePopupButtons) {
+            window.updatePopupButtons();
+        }
     }
 
     // كائن إدارة العملات المحدث للربط مع قاعدة البيانات السحابية
     const coinsManager = {
         getCoins: function() {
             return coins;
+        },
+        setCoins: function(amount) {
+            coins = amount;
+            updateCoinsUI();
         },
         addCoins: async function(amount, reason = 'game_reward') {
             // تحديث الواجهة فوراً (Optimistic UI)
@@ -198,11 +218,11 @@ import { supabase } from '../src/api/supabaseClient.js';
     window.rewardedTiles = rewardedTiles; 
 
     document.addEventListener("DOMContentLoaded", async () => {
-        await initCoinsFromServer();
-        watchGameBoard();
-        handleDailyReward();
-        if (window.updatePopupButtons) {
-            window.updatePopupButtons();
-        }
+        // ننتظر قليلاً للتأكد من انتهاء دالة المصادقة الرئيسية وحقن بيانات اللاعب
+        setTimeout(async () => {
+            await initCoinsFromServer();
+            watchGameBoard();
+            handleDailyReward();
+        }, 300);
     });
 })();
