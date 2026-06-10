@@ -74,7 +74,7 @@ const boardFullMessages = [
 ];
 
 const timeOutMessages = [
-    "🐢 السلحفاة حطمت رقمك القياسي بالسرعة!", "😴 نمت وأرسلت تفكر بالخطوة؟ الوقت ما ينتظر!",
+    "🐢 السلحفاة حطمت رقمك القياسي بالسرعة!", "😴 نمت وأرسلت تفكر بالخطوة？ الوقت ما ينتظر!",
     "⏱️ العداد مات من الملل وأنت تتأمل البورد!", "💀 الوقت مات بسبب بطئك الشديد!",
     "🥶 التفكير الزائد خلاك صنم لين صفر العداد!", "⏰ تيك توك.. الوقت مو لصالح الناس البطيئة!",
     "🤦‍♂️ جلست تحسبها يمين ويسار لين طار الوقت!", "🔋 سرعتك تحتاج شحن.. الوقت خلص يا كابتن!",
@@ -407,10 +407,25 @@ function restartGame(){
 
 // تحويل دالة دفع الرسوم لتصبح متزامنة بالكامل لتوافق تأكيدات السيرفر
 async function handlePayAndStart() {
+    const payBtn = document.getElementById("popupButton");
     if (window.coinsManager && typeof window.coinsManager.deductCoins === "function") {
+        if (payBtn) {
+            payBtn.disabled = true;
+            payBtn.textContent = "⏳ جاري الفحص...";
+        }
         let success = await window.coinsManager.deductCoins(5, 'entry_fee');
-        if (success) { restartGame(); } else { alert("عذراً، لا تملك عملات كافية للعب!"); }
-    } else { restartGame(); }
+        if (success) { 
+            restartGame(); 
+        } else { 
+            alert("عذراً، لا تملك عملات كافية للعب!"); 
+            if (payBtn) {
+                payBtn.disabled = false;
+                payBtn.textContent = "🎟️ دفع 5 عملات وبدء اللعب";
+            }
+        }
+    } else { 
+        restartGame(); 
+    }
 }
 
 window.restartGame = restartGame;
@@ -439,6 +454,8 @@ document.addEventListener("DOMContentLoaded", () => {
             soundToggleBtn.querySelector('.btn-icon').textContent = isMuted ? "🔇" : "🔊";
         });
     }
+    
+    // محاولة التحديث الأولية عند التحميل
     updatePopupButtons();
 });
 
@@ -553,14 +570,17 @@ function updatePopupButtons() {
     const popupSubtext = document.getElementById("popupSubtext");
     const popupDailyBtn = document.getElementById("popupDailyBtn");
 
-    if (window.coinsManager && window.coinsManager.getCoins() >= 5) {
-        if (payBtn) payBtn.style.display = "inline-block";
-        if (startFreeBtn) startFreeBtn.style.display = "none";
-        if (popupSubtext) popupSubtext.textContent = "مطلوب دفع 5 عملات لدخول الجولة";
-    } else {
-        if (payBtn) payBtn.style.display = "none";
-        if (startFreeBtn) startFreeBtn.style.display = "inline-block";
-        if (popupSubtext) popupSubtext.textContent = "يمكنك بدء اللعب مجاناً الآن أو استلام مكافأتك اليومية";
+    if (window.coinsManager) {
+        const currentCoins = window.coinsManager.getCoins();
+        if (currentCoins >= 5) {
+            if (payBtn) payBtn.style.display = "inline-block";
+            if (startFreeBtn) startFreeBtn.style.display = "none";
+            if (popupSubtext) popupSubtext.textContent = "مطلوب دفع 5 عملات لدخول الجولة";
+        } else {
+            if (payBtn) payBtn.style.display = "none";
+            if (startFreeBtn) startFreeBtn.style.display = "inline-block";
+            if (popupSubtext) popupSubtext.textContent = "يمكنك بدء اللعب مجاناً الآن أو استلام مكافأتك اليومية";
+        }
     }
 
     // تم إخفاء الـ popupDailyBtn ليتم التحكم به مركزياً وعبر السيرفر من ملف coins.js لضمان التكاملية وحظر الغش
@@ -570,6 +590,7 @@ function updatePopupButtons() {
 }
 window.updatePopupButtons = updatePopupButtons;
 
+// حقن وتحديث المستمعين لمدير العملات بطريقة آمنة تمنع التعليق وتحدث النوافذ فوراً
 if (window.coinsManager) {
     const originalAddCoins = window.coinsManager.addCoins;
     window.coinsManager.addCoins = function(amount, reason) {
