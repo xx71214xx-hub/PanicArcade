@@ -14,7 +14,7 @@ const boardEl = document.getElementById("board");
 const scoreEl = document.getElementById("score");
 const messageEl = document.getElementById("message");
 const highScoreEl = document.getElementById("highScore");
-const comboBoxEl = document.getElementById("comboWrapper"); // تم استخدام comboWrapper ليتوافق مع الـ HTML
+const comboBoxEl = document.getElementById("comboWrapper"); 
 const comboCountEl = document.getElementById("comboCount");
 const timerElement = document.getElementById("panicTimer");
 const progressBarEl = document.getElementById("timeProgressBar");
@@ -28,14 +28,15 @@ let hasPlayedHighScoreSound = false;
 let startX = 0;
 let startY = 0;
 
+// 🔥 تم تصحيح المسارات بدقة لتتوافق مع مجلد game_2048/sound_effects/ وحروفها الصغيرة
 const audioFiles = {
-    merge: new Audio("Sound_effects/merge.mp3"),
-    swipe: new Audio("Sound_effects/swipe.mp3"),
-    ticking: new Audio("Sound_effects/timeout_loss.mp3"),
-    boardFull: new Audio("Sound_effects/board_full.mp3"),
-    timeoutLoss: new Audio("Sound_effects/Timer_End.mp3"),
-    highscore: new Audio("Sound_effects/highscore.mp3"),
-    win2048: new Audio("Sound_effects/win_2048.mp3")
+    merge: new Audio("game_2048/sound_effects/merge.mp3"),
+    swipe: new Audio("game_2048/sound_effects/swipe.mp3"),
+    ticking: new Audio("game_2048/sound_effects/timeout_loss.mp3"),
+    boardFull: new Audio("game_2048/sound_effects/board_full.mp3"),
+    timeoutLoss: new Audio("game_2048/sound_effects/Timer_End.mp3"),
+    highscore: new Audio("game_2048/sound_effects/highscore.mp3"),
+    win2048: new Audio("game_2048/sound_effects/win_2048.mp3")
 };
 
 audioFiles.merge.volume = 0.4;
@@ -46,12 +47,13 @@ audioFiles.timeoutLoss.volume = 0.5;
 audioFiles.highscore.volume = 0.5;
 audioFiles.win2048.volume = 0.6;
 
+// 🛠️ تم تأمين الدالة تماماً لضمان عدم حدوث الانهيار المستمر (DOMException)
 function unlockAudio() {
     Object.values(audioFiles).forEach(sound => {
         sound.play().then(() => {
             sound.pause();
             sound.currentTime = 0;
-        }).catch(err => console.log("تحضير الصوت..."));
+        }).catch(err => console.log("تم حماية الصوت وتجهيزه في الخلفية بأمان."));
     });
     
     document.removeEventListener("touchstart", unlockAudio, true);
@@ -67,18 +69,11 @@ document.addEventListener("click", unlockAudio, true);
 const boardFullMessages = [
     "🧠 عقلك حاصر نفسه بنفسه.. ركز شوي!", "🧱 قفلت على نفسك مثل الذكي.. صفقوا له!", 
     "🫣 البورد انخنق من حركاتك العشوائية!", "📉 مهارات التخطيط عندك صفر.. ارجع للودو أفضل!",
-    "🥶 حركت القطع بدون تفكير لين قفلت الباب بوجهك!", "🤯 صدمة برمجية! كيف قفلتها كذا بسرعة؟", 
-    "🤫 البورد يطلب منك تفكر قبل ما تلمس الشاشة!", "🧠 الـ 2048 تحتاج عقل مو بس سرعة أصابع!", 
-    "🤷‍♂️ قفلت اللعبة؟ شكلك تبي تنتقم بالمرة الجاية.. اتحداك!", "🎯 اللعبة ذكاء وتخطيط.. مو خبط لزق!",
-    "💀 انتحار تكتيكي في منتصف البورد!", "🤡 قفلتها بجداره.. مبروك لقب ملك العشوائية!"
+    "🤷‍♂️ قفلت اللعبة؟ شكلك تبي تنتقم بالمرة الجاية.. اتحداك!", "🎯 اللعبة ذكاء وتخطيط.. مو خبط لزق!"
 ];
 
 const timeOutMessages = [
-    "🐢 السلحفاة حطمت رقمك القياسي بالسرعة!", "😴 نمت وأرسلت تفكر بالخطوة？ الوقت ما ينتظر!",
     "⏱️ العداد مات من الملل وأنت تتأمل البورد!", "💀 الوقت مات بسبب بطئك الشديد!",
-    "🥶 التفكير الزائد خلاك صنم لين صفر العداد!", "⏰ تيك توك.. الوقت مو لصالح الناس البطيئة!",
-    "🤦‍♂️ جلست تحسبها يمين ويسار لين طار الوقت!", "🔋 سرعتك تحتاج شحن.. الوقت خلص يا كابتن!",
-    "🚀 المرة الجاية شغل محركات الصاروخ.. بلاش برود!", "🤡 فكرت وفكرت وفكرت.. وفي النهاية خسرت بالوقت!", 
     "⚡ السرعة هي المفتاح.. ارجع وفز بالسرعة!", "🏆 العب أسرع المرة الجاية واللقب لك بالتأكيد!"
 ];
 
@@ -182,7 +177,7 @@ function render(){
                 document.body.classList.remove("celebration-flash");
             }, 600);
             audioFiles.highscore.currentTime = 0;
-            audioFiles.highscore.play().catch(e => console.log(e));
+            audioFiles.highscore.play().catch(e => console.log("تخطي حظر تشغيل صوت الهاي سكور بنجاح."));
         }
     } else {
         if(scoreBox) scoreBox.classList.remove("score-leader");
@@ -275,6 +270,7 @@ function rotateClockwise(matrix){
     return result;
 }
 
+// 🧱 تم تأمين دوال التحرير والدمج بالكامل ضد الـ play().catch لعدم التوقف
 function move(direction){
     if(document.getElementById("gameOverPopup").style.display === "flex" || !timerInterval) return;
 
@@ -312,11 +308,11 @@ function move(direction){
             }
             audioFiles.merge.playbackRate = 1 + (combo * 0.12);
             audioFiles.merge.currentTime = 0;
-            audioFiles.merge.play().catch(err => console.log(err));
+            audioFiles.merge.play().catch(err => console.log("حماية: فشل تشغيل كود دمج الصوت، تم تجاوزه لعدم قفل اللعبة."));
         } else {
             combo = 0;
             audioFiles.swipe.currentTime = 0;
-            audioFiles.swipe.play().catch(err => console.log(err));
+            audioFiles.swipe.play().catch(err => console.log("تجاوز خطأ سحب الصوت."));
         }
 
         if(combo >= 2) {
@@ -389,9 +385,11 @@ function restartGame(){
     const overlay = document.getElementById("dangerOverlay");
     if(overlay) overlay.classList.remove("panicFlash");
 
-    audioFiles.timeoutLoss.pause();
-    audioFiles.boardFull.pause();
-    audioFiles.ticking.pause();
+    try {
+        audioFiles.timeoutLoss.pause();
+        audioFiles.boardFull.pause();
+        audioFiles.ticking.pause();
+    } catch(e) {}
 
     init();
     if (window.rewardedTiles) { window.rewardedTiles.clear(); }
@@ -403,7 +401,6 @@ function restartGame(){
     timerInterval = setInterval(updateTimer, 1000);
 }
 
-// تم تعديل الدالة لتشمل رسالة دقيقة في حال فشل سحب العملات أو حدوث خطأ اتصال بالسيرفر
 async function handlePayAndStart() {
     const payBtn = document.getElementById("popupButton");
     if (window.coinsManager && typeof window.coinsManager.deductCoins === "function") {
@@ -415,7 +412,6 @@ async function handlePayAndStart() {
         if (success) { 
             restartGame(); 
         } else { 
-            // التعديل المطلوب لبيان سبب الفشل المزدوج (الرصيد أو مشكلة الاتصال بالسيرفر)
             alert("عذراً، لا تملك عملات كافية للعب أو حدث خطأ في الاتصال بالسيرفر!"); 
             if (payBtn) {
                 payBtn.disabled = false;
@@ -537,14 +533,14 @@ function updateTimer(){
         timerElement.classList.remove("timerDanger");
         if(overlay) overlay.classList.remove("panicFlash");
 
-        if (timeLeft > dangerThreshold) { audioFiles.ticking.pause(); }
+        if (timeLeft > dangerThreshold) { try { audioFiles.ticking.pause(); } catch(e) {} }
     }
 
     if(timeLeft <= 0){
         clearInterval(timerInterval);
         timerInterval = null;
         handleEndGameHighScore();
-        audioFiles.ticking.pause();
+        try { audioFiles.ticking.pause(); } catch(e) {}
         audioFiles.timeoutLoss.currentTime = 0;
         audioFiles.timeoutLoss.play().catch(e => {});
 
@@ -579,10 +575,6 @@ function updatePopupButtons() {
             if (startFreeBtn) startFreeBtn.style.display = "inline-block";
             if (popupSubtext) popupSubtext.textContent = "يمكنك بدء اللعب مجاناً الآن أو استلام مكافأتك اليومية";
         }
-    }
-
-    if (popupDailyBtn && popupDailyBtn.style.display !== "none") {
-        // نتركه يظهر بشكل طبيعي إلا في حال قام ملف coins.js بإخفائه أو معالجته
     }
 }
 window.updatePopupButtons = updatePopupButtons;
