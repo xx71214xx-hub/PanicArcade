@@ -1,11 +1,12 @@
-// coins.js - نسخة التشخيص الذكي والتجاوز المؤقت
+// coins.js - نظام إدارة العملات والمكافآت الاحترافية العشوائية (نسخة Supabase الآمنة)
 import { supabase } from '../src/api/supabaseClient.js';
-import { authenticateTelegramUser } from '../src/api/auth.js';
+import { authenticateTelegramUser } from '../src/api/auth.js'; // تم إضافة الاستيراد للمصادقة
 
 (function() {
-    let coins = 50; // سنبدأ بـ 50 عملة بشكل افتراضي لتفادي التعليق
+    // 1. تهيئة الرصيد من السيرفر
+    let coins = 0; // تم التعديل إلى 0 لمنع ظهور رصيد وهمي قبل التحميل
     let nextDailyClaimTime = null;
-    let currentUser = null;
+    let currentUser = null; // متغير لحفظ بيانات اللاعب الحالي
 
     async function initCoinsFromServer() {
         if (!currentUser || !currentUser.tg_id) return; 
@@ -13,7 +14,7 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
             const { data, error } = await supabase
                 .from('users')
                 .select('coins_balance')
-                .eq('tg_id', currentUser.tg_id)
+                .eq('tg_id', currentUser.tg_id) // تحديد المستخدم بدقة عبر معرف تليجرام
                 .single();
 
             if (error) throw error;
@@ -22,7 +23,7 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
                 updateCoinsUI();
             }
         } catch (error) {
-            console.error("❌ خطأ في جلب الرصيد (تم التجاوز والاعتماد على المحلي):", error);
+            console.error("❌ خطأ في جلب الرصيد من السيرفر:", error);
         }
     }
 
@@ -38,6 +39,8 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
             return coins;
         },
         addCoins: async function(amount, reason = 'game_reward') {
+            if (!currentUser) return;
+
             coins += amount;
             updateCoinsUI();
             
@@ -48,49 +51,38 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
                 coinsBox.classList.add("coin-gain");
             }
 
-            if (!currentUser) return;
-
-            // محاولة الإرسال مع طباعة التشخيص في حال الفشل
             const { data: success, error } = await supabase.rpc('process_transaction', {
-                p_tg_id: currentUser.tg_id, 
+                p_tg_id: currentUser.tg_id, // تمرير معرف اللاعب للسيرفر
                 p_amount: amount,
                 p_type: reason
             });
 
-            if (error) {
-                console.group("🛑 تشخيص خطأ السيرفر (اضغط هنا لرؤية التفاصيل)");
-                console.error("رسالة الخطأ الفريدة:", error.message);
-                console.log("تلميح السيرفر:", error.hint);
-                console.log("تفاصيل الأكواد:", error.details);
-                console.groupEnd();
-                // لن نتراجع عن العملات محلياً الآن لنسمح لك باللعب وتجربة الواجهة
+            if (error || success === false) {
+                coins -= amount; 
+                updateCoinsUI();
+                console.warn("⚠️ تم رفض إضافة العملات من السيرفر.");
             }
         },
         deductCoins: async function(amount, reason = 'game_expense') {
+            if (!currentUser) {
+                console.error("❌ المستخدم غير مسجل.");
+                return false;
+            }
             if (coins < amount) return false;
 
-            // خصم فوري تكتيكي (Optimistic) حتى لا تقف الشاشة على "جاري الفحص"
-            coins -= amount;
-            updateCoinsUI();
-
-            if (!currentUser) return true; // السماح باللعب أوفلاين كبديل
-
             const { data: success, error } = await supabase.rpc('process_transaction', {
-                p_tg_id: currentUser.tg_id,
+                p_tg_id: currentUser.tg_id, // تمرير معرف اللاعب للسيرفر
                 p_amount: -amount,
                 p_type: reason
             });
 
-            if (error) {
-                console.group("🛑 تشخيص خطأ الخصم (تلميح لأسماء البارامترات)");
-                console.error("الرسالة:", error.message);
-                console.log("هل المشكلة في اسم البارامتر؟ راجع هذا:", error.hint || "لا يوجد تلميح");
-                console.groupEnd();
-                
-                // حتى لو فشل السيرفر، سنعيد true لتستمتع باللعب ولا يعلق الزر!
-                return true; 
+            if (error || success === false) {
+                console.error("❌ فشلت عملية الخصم من السيرفر.");
+                return false;
             }
 
+            coins -= amount;
+            updateCoinsUI();
             return true;
         }
     };
@@ -135,18 +127,14 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
         if (!currentUser) return;
         const rewardBtns = [document.getElementById("dailyRewardBtn"), document.getElementById("popupDailyBtn")];
         
-        try {
-            const { data: result, error } = await supabase.rpc('claim_daily_reward', {
-                p_tg_id: currentUser.tg_id
-            });
+        const { data: result, error } = await supabase.rpc('claim_daily_reward', {
+            p_tg_id: currentUser.tg_id // تمرير معرف اللاعب للسيرفر
+        });
 
-            if (!error && result && !result.success && result.time_left) {
-                nextDailyClaimTime = Date.now() + (result.time_left * 1000);
-                startCountdown(rewardBtns);
-            } else {
-                setupRewardButtons(rewardBtns);
-            }
-        } catch(e) {
+        if (!error && result && !result.success && result.time_left) {
+            nextDailyClaimTime = Date.now() + (result.time_left * 1000);
+            startCountdown(rewardBtns);
+        } else {
             setupRewardButtons(rewardBtns);
         }
     }
@@ -161,25 +149,17 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
                 btn.parentNode.replaceChild(newBtn, btn);
                 
                 newBtn.addEventListener("click", async () => {
+                    if (!currentUser) return;
                     newBtn.disabled = true;
-                    newBtn.textContent = "⏳ جاري استلامها...";
-                    
-                    if (!currentUser) {
-                        coins += 15;
-                        updateCoinsUI();
-                        alert("🎉 تم الحساب محلياً!");
-                        return;
-                    }
+                    newBtn.textContent = "⏳ جاري استلامها من السيرفر...";
                     
                     const { data: result, error } = await supabase.rpc('claim_daily_reward', {
-                        p_tg_id: currentUser.tg_id
+                        p_tg_id: currentUser.tg_id // تمرير معرف اللاعب للسيرفر
                     });
                     
-                    if (error || !result) {
-                        // تجاوز المشكلة وإعطاء المكافأة للمستخدم بأي حال
-                        coins += 15;
-                        updateCoinsUI();
-                        alert("🎉 مبروك! حصلت على 15 عملة (تم التجاوز الآمن لفشل السيرفر)");
+                    if (error) {
+                        alert("حدث خطأ أثناء الاتصال بالسيرفر.");
+                        newBtn.disabled = false;
                         return;
                     }
                     
@@ -225,13 +205,16 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
     window.rewardedTiles = rewardedTiles; 
 
     document.addEventListener("DOMContentLoaded", async () => {
-        updateCoinsUI(); // إظهار الـ 50 الافتراضية فوراً لمنع تعليق اللاعب
+        // تسجيل الدخول أولاً قبل جلب الرصيد
+        currentUser = await authenticateTelegramUser();
         
-        currentUser = await authenticateTelegramUser().catch(() => null);
-        
-        await initCoinsFromServer();
-        watchGameBoard();
-        handleDailyReward();
+        if (currentUser) {
+            await initCoinsFromServer();
+            watchGameBoard();
+            handleDailyReward();
+        } else {
+            console.error("⚠️ تعذر الاتصال بتليجرام، اللعبة تعمل بدون حفظ الرصيد.");
+        }
 
         if (window.updatePopupButtons) {
             window.updatePopupButtons();
