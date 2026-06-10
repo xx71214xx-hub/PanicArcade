@@ -121,7 +121,6 @@ function checkAndSetStage() {
     }
 }
 
-// تعديل الدالة لتصبح غير متزامنة وتنتظر التحقق والخصم الفعلي من السيرفر
 async function undoMove() {
     if (!previousBoard) {
         alert("لا توجد حركة سابقة للتراجع عنها.");
@@ -136,7 +135,6 @@ async function undoMove() {
         return;
     }
     
-    // الانتظار الآمن لرد السيرفر لمنع ثغرات التراجع اللانهائي
     const success = await window.coinsManager.deductCoins(10, 'undo_move');
     if (!success) {
         alert("لا تملك عملات كافية في حسابك بالسيرفر.");
@@ -405,7 +403,7 @@ function restartGame(){
     timerInterval = setInterval(updateTimer, 1000);
 }
 
-// تحويل دالة دفع الرسوم لتصبح متزامنة بالكامل لتوافق تأكيدات السيرفر
+// تم تعديل الدالة لتشمل رسالة دقيقة في حال فشل سحب العملات أو حدوث خطأ اتصال بالسيرفر
 async function handlePayAndStart() {
     const payBtn = document.getElementById("popupButton");
     if (window.coinsManager && typeof window.coinsManager.deductCoins === "function") {
@@ -417,7 +415,8 @@ async function handlePayAndStart() {
         if (success) { 
             restartGame(); 
         } else { 
-            alert("عذراً، لا تملك عملات كافية للعب!"); 
+            // التعديل المطلوب لبيان سبب الفشل المزدوج (الرصيد أو مشكلة الاتصال بالسيرفر)
+            alert("عذراً، لا تملك عملات كافية للعب أو حدث خطأ في الاتصال بالسيرفر!"); 
             if (payBtn) {
                 payBtn.disabled = false;
                 payBtn.textContent = "🎟️ دفع 5 عملات وبدء اللعب";
@@ -455,7 +454,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
     
-    // محاولة التحديث الأولية عند التحميل
     updatePopupButtons();
 });
 
@@ -583,14 +581,12 @@ function updatePopupButtons() {
         }
     }
 
-    // تم إخفاء الـ popupDailyBtn ليتم التحكم به مركزياً وعبر السيرفر من ملف coins.js لضمان التكاملية وحظر الغش
     if (popupDailyBtn && popupDailyBtn.style.display !== "none") {
         // نتركه يظهر بشكل طبيعي إلا في حال قام ملف coins.js بإخفائه أو معالجته
     }
 }
 window.updatePopupButtons = updatePopupButtons;
 
-// حقن وتحديث المستمعين لمدير العملات بطريقة آمنة تمنع التعليق وتحدث النوافذ فوراً
 if (window.coinsManager) {
     const originalAddCoins = window.coinsManager.addCoins;
     window.coinsManager.addCoins = function(amount, reason) {
