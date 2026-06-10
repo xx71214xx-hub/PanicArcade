@@ -1,12 +1,13 @@
+// game_2048/coins.js
+
 // coins.js - نظام إدارة العملات والمكافآت الاحترافية العشوائية (نسخة Supabase الآمنة)
 import { supabase } from '../src/api/supabaseClient.js';
-import { authenticateTelegramUser } from '../src/api/auth.js'; 
+import { authenticateTelegramUser } from '../src/api/auth.js';
 
 (function() {
-    // تهيئة الرصيد من السيرفر
-    let coins = 0; 
+    let coins = 0; // رصيد مبدئي صفر 
     let nextDailyClaimTime = null;
-    let currentUser = null; // متغير لحفظ بيانات اللاعب الحالي
+    let currentUser = null; 
 
     async function initCoinsFromServer() {
         if (!currentUser || !currentUser.tg_id) return; 
@@ -21,11 +22,6 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
             if (data) {
                 coins = data.coins_balance;
                 updateCoinsUI();
-                
-                // 🔥 تحديث واجهة الأزرار فوراً بعد نجاح جلب الرصيد الحقيقي من السيرفر
-                if (window.updatePopupButtons) {
-                    window.updatePopupButtons();
-                }
             }
         } catch (error) {
             console.error("❌ خطأ في جلب الرصيد من السيرفر:", error);
@@ -67,10 +63,6 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
                 updateCoinsUI();
                 console.warn("⚠️ تم رفض إضافة العملات من السيرفر.");
             }
-            
-            if (window.updatePopupButtons) {
-                window.updatePopupButtons();
-            }
         },
         deductCoins: async function(amount, reason = 'game_expense') {
             if (!currentUser) {
@@ -79,36 +71,20 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
             }
             if (coins < amount) return false;
 
-            // خصم محلي مؤقت سريع لتحسين تجربة المستخدم
-            coins -= amount;
-            updateCoinsUI();
+            const { data: success, error } = await supabase.rpc('process_transaction', {
+                p_tg_id: currentUser.tg_id, 
+                p_amount: -amount,
+                p_type: reason
+            });
 
-            try {
-                const { data: success, error } = await supabase.rpc('process_transaction', {
-                    p_tg_id: currentUser.tg_id, 
-                    p_amount: -amount,
-                    p_type: reason
-                });
-
-                if (error || success === false) {
-                    // إلغاء الخصم في حال فشل السيرفر
-                    coins += amount;
-                    updateCoinsUI();
-                    console.error("❌ فشلت عملية الخصم من السيرفر.");
-                    return false;
-                }
-
-                if (window.updatePopupButtons) {
-                    window.updatePopupButtons();
-                }
-                return true;
-            } catch (err) {
-                // إلغاء الخصم في حال حدوث خطأ شبكة
-                coins += amount;
-                updateCoinsUI();
-                console.error("❌ خطأ في الاتصال أثناء الخصم:", err);
+            if (error || success === false) {
+                console.error("❌ فشلت عملية الخصم من السيرفر.");
                 return false;
             }
+
+            coins -= amount;
+            updateCoinsUI();
+            return true;
         }
     };
 
@@ -230,14 +206,17 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
     window.rewardedTiles = rewardedTiles; 
 
     document.addEventListener("DOMContentLoaded", async () => {
-        // 1. تسجيل الدخول أولاً قبل جلب الرصيد
         currentUser = await authenticateTelegramUser();
         
         if (currentUser) {
-            // 2. جلب الرصيد الحقيقي (الدالة ستقوم بتحديث الواجهة فور الانتهاء)
             await initCoinsFromServer();
             watchGameBoard();
             handleDailyReward();
+            
+            // إخطار واجهة الأزرار بأن الرصيد تم تحميله بنجاح من السيرفر لفتح الطور المدفوع
+            if (window.updatePopupButtons) {
+                window.updatePopupButtons();
+            }
         } else {
             console.error("⚠️ تعذر الاتصال بتليجرام، اللعبة تعمل بدون حفظ الرصيد.");
             if (window.updatePopupButtons) {
