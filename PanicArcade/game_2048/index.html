@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#0B0C10">
+    <title>Panic Arcade 2048</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="dangerOverlay"></div>
+<div class="container">
+    <div id="panicTimerWrapper">
+        <a href="../index.html" id="homeBtn" class="home-btn" title="العودة للمنصة الرئيسية">🏠</a>
+        
+        <div id="stageLabel">المرحلة العادية</div>
+        <div id="panicTimer">⏳ 20</div>
+        <div id="timeProgressBarCont"><div id="timeProgressBar"></div></div>
+    </div>
+
+    <div class="top-header">
+        <h1>2048</h1>
+        <div class="scores-container">
+            <div id="coinsBox" class="score-box coin-box">
+                <span>العملات</span>
+                <strong id="coinsBalance">50</strong>
+            </div>
+            <div class="score-box">
+                <span>النقاط</span>
+                <strong id="score">0</strong>
+            </div>
+            <div class="score-box">
+                <span>أفضل</span>
+                <strong id="highScore">0</strong>
+            </div>
+        </div>
+    </div>
+
+    <div id="comboWrapper">
+        <div id="comboBox">
+            <span>🔥 COMBO MULTIPLIER</span>
+            <strong id="comboCount">0 🔥</strong>
+        </div>
+    </div>
+
+    <div class="game-board" id="board"></div>
+
+    <div id="gameOverPopup" class="popup">
+        <div class="popup-box">
+            <h2 id="message">تحدي Panic Arcade</h2>
+            <div id="popupSubtext" style="color: #aaa; margin-bottom: 15px; font-size: 14px;">مطلوب دفع 5 عملات لدخول الجولة</div>
+            <button id="popupButton" style="display:none;">🎟️ دفع 5 عملات وبدء اللعب</button>
+            <button id="startFreeButton" class="reward-btn" style="margin-top:12px;">▶️ بدء اللعب مجاناً</button>
+            <button id="popupDailyBtn" class="reward-btn" style="margin-top:12px; display:none;">🎁 استلم مكافأتك اليومية (+15 عملة)</button>
+        </div>
+    </div>
+
+    <div class="reward-container" style="margin-top: 15px;">
+        <button id="dailyRewardBtn" class="reward-btn">🎁 استلم مكافأتك اليومية (+15 عملة)</button>
+    </div>
+
+    <div class="controls">
+        استخدم الأسهم ← ↑ ↓ → أو السحب على الجوال
+    </div>
+
+    <div class="action-bar-3d">
+        <button id="restartBtn" class="btn-3d-glass" title="إعادة تشغيل اللعبة">
+            <span class="btn-icon">🔄</span>
+        </button>
+        
+        <button id="undoBtn" class="btn-3d-glass undo-layout" title="تراجع عن الحركة (10 عملات)">
+            <img src="to_retreat.png" alt="تراجع" class="undo-img-icon">
+            <span class="undo-cost">10🪙</span>
+        </button>
+
+        <button id="soundToggleBtn" class="btn-3d-glass" title="كتم/تفعيل الصوت">
+            <span class="btn-icon">🔊</span>
+        </button>
+    </div>
+</div>
+<script type="module" src="coins.js"></script>
+<script type="module" src="script.js"></script>
+</body>
+</html>
