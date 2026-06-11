@@ -2,33 +2,92 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>منصة ألعاب Panic Arcade</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0B0C10">
+    <title>منصة Panic Arcade للألعاب</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+    <div class="stars-bg"></div>
+
     <div class="hub-container">
-        <button id="launchGameBtn" class="play-btn-3d" style="width:100%; border:none; font-family:inherit; cursor:pointer;">▶️ اِلعب الآن</button>
+        
+        <div id="tgProfileBar" class="tg-profile-bar">
+            <div class="tg-avatar-wrapper">
+                <img id="userAvatar" src="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='50' fill='%231f2833'/><text x='50' y='55' font-family='sans-serif' font-size='30' fill='%2366FCF1' text-anchor='middle'>🎮</text></svg>" alt="Avatar" class="tg-avatar">
+                <div class="tg-status-dot"></div>
+            </div>
+            <div class="tg-user-info">
+                <div id="userName" class="tg-username">جاري تسجيل الدخول...</div>
+                <div id="userRank" class="tg-rank">الرصيد: 0 🪙</div>
+            </div>
+            <div class="tg-platform-badge">Telegram Hub</div>
+        </div>
+
+        <header class="hub-header">
+            <h1>PANIC <span>ARCADE</span></h1>
+            <p class="hub-subtitle">اختر تحديك البصري والسريع وابدأ اللعب فوراً</p>
+        </header>
+
+        <div class="games-grid">
+            
+            <div class="game-card active">
+                <div class="card-glow"></div>
+                <div class="game-badge">نشطة 🔥</div>
+                <div class="game-icon-wrapper">
+                    <img src="cover.png" alt="Panic 2048 Cover" class="game-cover-img">
+                </div>
+                <h2 class="game-title">Panic Arcade 2048</h2>
+                <p class="game-desc">دمج أرقام سريع تحت ضغط الوقت المتغير ونظام إدارة العملات الذكي. هل تستطيع الصمود?</p>
+                <a href="game_2048/index.html" class="play-btn-3d">▶️ اِلعب الآن</a>
+            </div>
+
+            <div class="game-card coming-soon">
+                <div class="game-badge locked">قريباً 🔒</div>
+                <div class="game-icon-wrapper">
+                    <span class="game-icon">🚀</span>
+                </div>
+                <h2 class="game-title">تحدي السرعة القادم</h2>
+                <p class="game-desc">لعبة آركيد جديدة تعتمد على المهارة اللمسية والسرعة الفائقة. جاري التطوير بحماس...</p>
+                <button class="play-btn-3d disabled" disabled>⏳ مغلق مؤقتاً</button>
+            </div>
+
+        </div>
+
+        <footer class="hub-footer">
+            <p>&copy; 2026 جميع الحقوق محفوظة لـ Panic Arcade</p>
+        </footer>
     </div>
 
 <script type="module">
     import { authenticateTelegramUser } from './src/api/auth.js';
 
-    document.addEventListener("DOMContentLoaded", async () => {
-        // تشغيل المصادقة في الـ Hub الرئيسي لإنشاء الحساب أولاً
-        await authenticateTelegramUser();
-    });
-
-    // كود نقل البيانات السلس إلى مجلد اللعبة عند الضغط
-    document.getElementById("launchGameBtn").addEventListener("click", function() {
+    document.addEventListener("DOMContentLoaded", async function() {
         if (window.Telegram && window.Telegram.WebApp) {
-            const initData = window.Telegram.WebApp.initData;
-            window.location.href = `game_2048/index.html?tgWebAppStartParam=${encodeURIComponent(initData)}`;
-        } else {
-            window.location.href = "game_2048/index.html";
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand(); // تمديد المنصة بالكامل لتملأ شاشة تليجرام
+
+            // 1. بدء عملية المصادقة الآمنة وجلب البيانات الحقيقية من السيرفر
+            const dbUser = await authenticateTelegramUser();
+
+            if (dbUser) {
+                // 2. تحديث واجهة المستخدم بالبيانات الموثوقة القادمة من قاعدة البيانات
+                document.getElementById("userName").textContent = dbUser.full_name || dbUser.username || "لاعب تليجرام";
+                document.getElementById("userRank").textContent = `الرصيد: ${dbUser.coins_balance} 🪙`;
+
+                // سحب الصورة الشخصية الحقيقية للاعب من تطبيق تليجرام
+                const tgUser = tg.initDataUnsafe?.user;
+                if (tgUser && tgUser.photo_url) {
+                    document.getElementById("userAvatar").src = tgUser.photo_url;
+                }
+            } else {
+                document.getElementById('userName').textContent='فشل التحقق';
+                document.getElementById('userRank').textContent='تم منع الدخول';
+            }
         }
     });
 </script>
