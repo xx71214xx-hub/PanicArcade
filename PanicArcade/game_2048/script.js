@@ -1,4 +1,4 @@
-// game_2048/script.js
+import { supabase } from '../src/api/supabaseClient.js';
 
 const SIZE = 4;
 
@@ -16,7 +16,7 @@ const boardEl = document.getElementById("board");
 const scoreEl = document.getElementById("score");
 const messageEl = document.getElementById("message");
 const highScoreEl = document.getElementById("highScore");
-const comboBoxEl = document.getElementById("comboWrapper"); 
+const comboBoxEl = document.getElementById("comboWrapper"); // تم استخدام comboWrapper ليتوافق مع الـ HTML
 const comboCountEl = document.getElementById("comboCount");
 const timerElement = document.getElementById("panicTimer");
 const progressBarEl = document.getElementById("timeProgressBar");
@@ -31,13 +31,13 @@ let startX = 0;
 let startY = 0;
 
 const audioFiles = {
-    merge: new Audio("sound_effects/merge.mp3"),
-    swipe: new Audio("sound_effects/swipe.mp3"),
-    ticking: new Audio("sound_effects/timeout_loss.mp3"),
-    boardFull: new Audio("sound_effects/board_full.mp3"),
-    timeoutLoss: new Audio("sound_effects/Timer_End.mp3"),
-    highscore: new Audio("sound_effects/highscore.mp3"),
-    win2048: new Audio("sound_effects/win_2048.mp3")
+    merge: new Audio("Sound_effects/merge.mp3"),
+    swipe: new Audio("Sound_effects/swipe.mp3"),
+    ticking: new Audio("Sound_effects/timeout_loss.mp3"),
+    boardFull: new Audio("Sound_effects/board_full.mp3"),
+    timeoutLoss: new Audio("Sound_effects/Timer_End.mp3"),
+    highscore: new Audio("Sound_effects/highscore.mp3"),
+    win2048: new Audio("Sound_effects/win_2048.mp3")
 };
 
 audioFiles.merge.volume = 0.4;
@@ -68,11 +68,20 @@ document.addEventListener("click", unlockAudio, true);
 
 const boardFullMessages = [
     "🧠 عقلك حاصر نفسه بنفسه.. ركز شوي!", "🧱 قفلت على نفسك مثل الذكي.. صفقوا له!", 
-    "🤷‍♂️ قفلت اللعبة؟ شكلك تبي تنتقم بالمرة الجاية.. اتحداك!", "🎯 اللعبة ذكاء وتخطيط.. مو خبط لزق!"
+    "🫣 البورد انخنق من حركاتك العشوائية!", "📉 مهارات التخطيط عندك صفر.. ارجع للودو أفضل!",
+    "🥶 حركت القطع بدون تفكير لين قفلت الباب بوجهك!", "🤯 صدمة برمجية! كيف قفلتها كذا بسرعة؟", 
+    "🤫 البورد يطلب منك تفكر قبل ما تلمس الشاشة!", "🧠 الـ 2048 تحتاج عقل مو بس سرعة أصابع!", 
+    "🤷‍♂️ قفلت اللعبة؟ شكلك تبي تنتقم بالمرة الجاية.. اتحداك!", "🎯 اللعبة ذكاء وتخطيط.. مو خبط لزق!",
+    "💀 انتحار تكتيكي في منتصف البورد!", "🤡 قفلتها بجداره.. مبروك لقب ملك العشوائية!"
 ];
 
 const timeOutMessages = [
-    "🐢 السلحفاة حطمت رقمك القياسي بالسرعة!", "😴 نمت وأرسلت تفكر بالخطوة؟ الوقت ما ينتظر!"
+    "🐢 السلحفاة حطمت رقمك القياسي بالسرعة!", "😴 نمت وأرسلت تفكر بالخطوة؟ الوقت ما ينتظر!",
+    "⏱️ العداد مات من الملل وأنت تتأمل البورد!", "💀 الوقت مات بسبب بطئك الشديد!",
+    "🥶 التفكير الزائد خلاك صنم لين صفر العداد!", "⏰ تيك توك.. الوقت مو لصالح الناس البطيئة!",
+    "🤦‍♂️ جلست تحسبها يمين ويسار لين طار الوقت!", "🔋 سرعتك تحتاج شحن.. الوقت خلص يا كابتن!",
+    "🚀 المرة الجاية شغل محركات الصاروخ.. بلاش برود!", "🤡 فكرت وفكرت وفكرت.. وفي النهاية خسرت بالوقت!", 
+    "⚡ السرعة هي المفتاح.. ارجع وفز بالسرعة!", "🏆 العب أسرع المرة الجاية واللقب لك بالتأكيد!"
 ];
 
 function init() {
@@ -183,10 +192,24 @@ function render(){
     }
 }
 
-function handleEndGameHighScore() {
+async function handleEndGameHighScore() {
     if (score > highScore) {
         highScore = score;
         localStorage.setItem("highScore", score);
+
+        // إرسال أعلى نتيجة إلى السيرفر
+        if (window.currentUser && window.currentUser.tg_id) {
+            try {
+                await supabase.rpc('update_high_score', {
+                    p_tg_id: window.currentUser.tg_id,
+                    p_score: score
+                });
+
+                console.log("✅ تم حفظ أعلى نتيجة في السيرفر بنجاح!");
+            } catch (err) {
+                console.error("❌ فشل حفظ أعلى نتيجة:", err);
+            }
+        }
     }
 }
 
@@ -268,7 +291,7 @@ function rotateClockwise(matrix){
     return result;
 }
 
-function move(direction){
+async function move(direction){
     if(document.getElementById("gameOverPopup").style.display === "flex" || !timerInterval) return;
 
     const boardSnapshot = JSON.parse(JSON.stringify(board));
@@ -334,7 +357,7 @@ function move(direction){
         } else if(checkGameOver()){
             clearInterval(timerInterval);
             timerInterval = null;
-            handleEndGameHighScore();
+            await handleEndGameHighScore();
             audioFiles.ticking.pause();
             audioFiles.boardFull.currentTime = 0;
             audioFiles.boardFull.play().catch(e => {});
@@ -396,6 +419,7 @@ function restartGame(){
     timerInterval = setInterval(updateTimer, 1000);
 }
 
+// تم تعديل الدالة لتشمل رسالة دقيقة في حال فشل سحب العملات أو حدوث خطأ اتصال بالسيرفر
 async function handlePayAndStart() {
     const payBtn = document.getElementById("popupButton");
     if (window.coinsManager && typeof window.coinsManager.deductCoins === "function") {
@@ -407,6 +431,7 @@ async function handlePayAndStart() {
         if (success) { 
             restartGame(); 
         } else { 
+            // التعديل المطلوب لبيان سبب الفشل المزدوج (الرصيد أو مشكلة الاتصال بالسيرفر)
             alert("عذراً، لا تملك عملات كافية للعب أو حدث خطأ في الاتصال بالسيرفر!"); 
             if (payBtn) {
                 payBtn.disabled = false;
@@ -475,7 +500,7 @@ document.addEventListener("touchend", e => {
     startX = 0; startY = 0;
 }, { passive: true });
 
-function updateTimer(){
+async function updateTimer(){
     if(!timerElement) return;
     const now = Date.now();
     const elapsedSeconds = Math.floor((now - lastTickTime) / 1000);
@@ -534,7 +559,7 @@ function updateTimer(){
     if(timeLeft <= 0){
         clearInterval(timerInterval);
         timerInterval = null;
-        handleEndGameHighScore();
+        await handleEndGameHighScore();
         audioFiles.ticking.pause();
         audioFiles.timeoutLoss.currentTime = 0;
         audioFiles.timeoutLoss.play().catch(e => {});
@@ -557,6 +582,7 @@ function updatePopupButtons() {
     const payBtn = document.getElementById("popupButton");
     const startFreeBtn = document.getElementById("startFreeButton");
     const popupSubtext = document.getElementById("popupSubtext");
+    const popupDailyBtn = document.getElementById("popupDailyBtn");
 
     if (window.coinsManager) {
         const currentCoins = window.coinsManager.getCoins();
@@ -569,6 +595,10 @@ function updatePopupButtons() {
             if (startFreeBtn) startFreeBtn.style.display = "inline-block";
             if (popupSubtext) popupSubtext.textContent = "يمكنك بدء اللعب مجاناً الآن أو استلام مكافأتك اليومية";
         }
+    }
+
+    if (popupDailyBtn && popupDailyBtn.style.display !== "none") {
+        // نتركه يظهر بشكل طبيعي إلا في حال قام ملف coins.js بإخفائه أو معالجته
     }
 }
 window.updatePopupButtons = updatePopupButtons;
