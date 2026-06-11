@@ -31,13 +31,13 @@ let startX = 0;
 let startY = 0;
 
 const audioFiles = {
-    merge: new Audio("Sound_effects/merge.mp3"),
-    swipe: new Audio("Sound_effects/swipe.mp3"),
-    ticking: new Audio("Sound_effects/timeout_loss.mp3"),
-    boardFull: new Audio("Sound_effects/board_full.mp3"),
-    timeoutLoss: new Audio("Sound_effects/Timer_End.mp3"),
-    highscore: new Audio("Sound_effects/highscore.mp3"),
-    win2048: new Audio("Sound_effects/win_2048.mp3")
+    merge: new Audio("sound_effects/merge.mp3"),
+    swipe: new Audio("sound_effects/swipe.mp3"),
+    ticking: new Audio("sound_effects/timeout_loss.mp3"),
+    boardFull: new Audio("sound_effects/board_full.mp3"),
+    timeoutLoss: new Audio("sound_effects/Timer_End.mp3"),
+    highscore: new Audio("sound_effects/highscore.mp3"),
+    win2048: new Audio("sound_effects/win_2048.mp3")
 };
 
 audioFiles.merge.volume = 0.4;
