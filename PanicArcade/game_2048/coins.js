@@ -5,21 +5,26 @@ import { supabase } from '../src/api/supabaseClient.js';
     // 1. تهيئة الرصيد من السيرفر بدلاً من الـ LocalStorage
     let coins = 0; 
     let nextDailyClaimTime = null;
+    let isRequesting = false;
 
     async function initCoinsFromServer() {
         try {
-            const { data, error } = await supabase
-                .from('users')
-                .select('coins_balance')
-                .single();
+            // استخدام RPC للحصول على حالة المستخدم الحالية بشكل آمن
+            const { data, error } = await supabase.rpc('get_user_state');
 
             if (error) throw error;
             if (data) {
                 coins = data.coins_balance;
                 updateCoinsUI();
+                return data;
             }
         } catch (error) {
             console.error("❌ خطأ في جلب الرصيد من السيرفر:", error);
+            // إذا كان هناك مستخدم في الذاكرة من صفحة تسجيل الدخول
+            if (window.currentUser) {
+                coins = window.currentUser.coins_balance;
+                updateCoinsUI();
+            }
         }
     }
 
@@ -36,46 +41,58 @@ import { supabase } from '../src/api/supabaseClient.js';
             return coins;
         },
         addCoins: async function(amount, reason = 'game_reward') {
-            
-            
-            // تأثير وميض ذهبي حماسي لصندوق العملات عند الربح
-            const coinsBox = document.getElementById("coinsBox");
-            if (coinsBox) {
-                coinsBox.classList.remove("coin-gain");
-                void coinsBox.offsetWidth; // Trigger reflow
-                coinsBox.classList.add("coin-gain");
-            }
+            if (isRequesting) return;
+            isRequesting = true;
 
-            // توثيق وحقن العملية في السيرفر بشكل رسمي
-            const { data: success, error } = await supabase.rpc('process_transaction', {
-                p_amount: amount,
-                p_type: reason
-            });
+            try {
+                // توثيق وحقن العملية في السيرفر بشكل رسمي
+                const { data: success, error } = await supabase.rpc('process_transaction', {
+                    p_amount: amount,
+                    p_type: reason
+                });
 
-            if (error || !success) {
-                console.warn("⚠️ تم رفض إضافة العملات من السيرفر.");
-            } else if (window.currentUser) {
-                coins = window.currentUser.coins_balance ?? coins;
-                updateCoinsUI();
+                if (error || !success) {
+                    console.warn("⚠️ تم رفض إضافة العملات من السيرفر.");
+                    return;
+                }
+
+                // تحديث من السيرفر مباشرة لضمان الدقة
+                await initCoinsFromServer();
+                
+                // تأثير وميض ذهبي حماسي لصندوق العملات عند الربح
+                const coinsBox = document.getElementById("coinsBox");
+                if (coinsBox) {
+                    coinsBox.classList.remove("coin-gain");
+                    void coinsBox.offsetWidth; // Trigger reflow
+                    coinsBox.classList.add("coin-gain");
+                }
+            } finally {
+                isRequesting = false;
             }
         },
         deductCoins: async function(amount, reason = 'game_expense') {
+            if (isRequesting) return false;
             if (coins < amount) return false;
+            isRequesting = true;
 
-            // انتظار تأكيد الخصم من السيرفر أولاً لحماية النظام
-            const { data: success, error } = await supabase.rpc('process_transaction', {
-                p_amount: -amount,
-                p_type: reason
-            });
+            try {
+                // انتظار تأكيد الخصم من السيرفر أولاً لحماية النظام
+                const { data: success, error } = await supabase.rpc('process_transaction', {
+                    p_amount: -amount,
+                    p_type: reason
+                });
 
-            if (error || !success) {
-                console.error("❌ فشلت عملية الخصم من السيرفر.");
-                return false;
+                if (error || !success) {
+                    console.error("❌ فشلت عملية الخصم من السيرفر.");
+                    return false;
+                }
+
+                // تحديث من السيرفر مباشرة لضمان الدقة
+                await initCoinsFromServer();
+                return true;
+            } finally {
+                isRequesting = false;
             }
-
-            coins -= amount;
-            updateCoinsUI();
-            return true;
         }
     };
 
@@ -121,15 +138,28 @@ import { supabase } from '../src/api/supabaseClient.js';
     async function handleDailyReward() {
         const rewardBtns = [document.getElementById("dailyRewardBtn"), document.getElementById("popupDailyBtn")];
         
-        // التحقق الأولي من وقت السيرفر بدلاً من التخزين المحلي
-        return; // disabled automatic claim; reward only on user action
+        try {
+            // التحقق الأولي من وقت السيرفر بدلاً من التخزين المحلي
+            // إضافة timeout لمنع التجميد
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        // إذا كانت المكافأة مستلمة بالفعل، قم بتشغيل العداد بناءً على الوقت المتبقي الفعلي
-        if (!error && result && !result.success && result.time_left) {
-            nextDailyClaimTime = Date.now() + (result.time_left * 1000);
-            startCountdown(rewardBtns);
-        } else {
-            // إذا كانت المكافأة متاحة، قم بتهيئة الأزرار للاستلام
+            const { data: result, error } = await supabase.rpc('claim_daily_reward');
+            clearTimeout(timeoutId);
+
+            // إذا كانت المكافأة مستلمة بالفعل، قم بتشغيل العداد بناءً على الوقت المتبقي الفعلي
+            if (!error && result && !result.success && result.time_left) {
+                nextDailyClaimTime = Date.now() + (result.time_left * 1000);
+                startCountdown(rewardBtns);
+            } else if (!error && result && result.success) {
+                // المكافأة متاحة
+                setupRewardButtons(rewardBtns);
+            } else {
+                // حالة افتراضية في حال الخطأ أو عدم التوفر
+                setupRewardButtons(rewardBtns);
+            }
+        } catch (err) {
+            console.error("Daily reward check failed:", err);
             setupRewardButtons(rewardBtns);
         }
     }
@@ -140,33 +170,53 @@ import { supabase } from '../src/api/supabaseClient.js';
                 btn.disabled = false;
                 btn.textContent = "🎁 استلم مكافأتك اليومية (+15 عملة)";
                 
+                // إزالة المستمعين القدامى
                 const newBtn = btn.cloneNode(true);
                 btn.parentNode.replaceChild(newBtn, btn);
                 
                 newBtn.addEventListener("click", async () => {
+                    if (isRequesting) return;
+                    isRequesting = true;
                     newBtn.disabled = true;
-                    newBtn.textContent = "⏳ جاري استلامها من السيرفر...";
+                    newBtn.textContent = "⏳ جاري استلامها...";
                     
-                    return; // disabled automatic claim; reward only on user action
-                    
-                    if (error) {
-                        alert("حدث خطأ أثناء الاتصال بالسيرفر.");
-                        newBtn.disabled = false;
-                        return;
-                    }
-                    
-                    if (result.success) {
-                        coins += 15;
-                        updateCoinsUI();
-                        alert("🎉 مبروك! حصلت على 15 عملة مجانية بمناسبة دخولك اليومي!");
-                        nextDailyClaimTime = new Date(result.new_claim_time).getTime() + (24 * 60 * 60 * 1000);
-                        handleDailyReward(); // إعادة تحديث العداد
-                    } else {
-                        alert(result.message || "لم يحن الوقت بعد");
-                        if (result.time_left) {
-                            nextDailyClaimTime = Date.now() + (result.time_left * 1000);
+                    try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => {
+                            controller.abort();
+                            isRequesting = false;
+                            newBtn.disabled = false;
+                            newBtn.textContent = "🎁 استلم مكافأتك اليومية (+15 عملة)";
+                        }, 5000);
+
+                        const { data: result, error } = await supabase.rpc('claim_daily_reward');
+                        clearTimeout(timeoutId);
+                        
+                        if (error) throw error;
+                        
+                        if (result.success) {
+                            await initCoinsFromServer();
+                            alert("🎉 مبروك! حصلت على 15 عملة مجانية بمناسبة دخولك اليومي!");
+                            if (result.new_claim_time) {
+                                nextDailyClaimTime = new Date(result.new_claim_time).getTime() + (24 * 60 * 60 * 1000);
+                            } else {
+                                nextDailyClaimTime = Date.now() + (24 * 60 * 60 * 1000);
+                            }
                             startCountdown(rewardBtns);
+                        } else {
+                            alert(result.message || "لم يحن الوقت بعد");
+                            if (result.time_left) {
+                                nextDailyClaimTime = Date.now() + (result.time_left * 1000);
+                                startCountdown(rewardBtns);
+                            }
                         }
+                    } catch (err) {
+                        console.error("Claim daily failed:", err);
+                        alert("فشل الاتصال بالسيرفر. يرجى المحاولة لاحقاً.");
+                        newBtn.disabled = false;
+                        newBtn.textContent = "🎁 استلم مكافأتك اليومية (+15 عملة)";
+                    } finally {
+                        isRequesting = false;
                     }
                 });
             }
