@@ -12,7 +12,7 @@ export async function authenticateTelegramUser() {
     try {
         // إرسال سطر البيانات الكامل المشفر ليقوم السيرفر بفحصه ومطابقته بالتوكن المخزن بجدول الإعدادات
         const { data, error: rpcError } = await supabase.rpc('telegram_login', {
-            p_init_data: initData
+            initData: initData
         });
 
         if (rpcError) throw rpcError;
@@ -21,14 +21,19 @@ export async function authenticateTelegramUser() {
             throw new Error(data?.error || "فشل تسجيل الدخول والتحقق من السيرفر");
         }
 
-        console.log("✅ تم التحقق الآمن بنجاح ومزامنة بيانات اللاعب:", data.user);
+        console.log("✅ تم التحقق الآمن بنجاح ومزامنة بيانات اللاعب:", data);
         
         // حفظ بيانات اللاعب ورصيده الحالي في الذاكرة المؤقتة للعبة لتحديث واجهات العملات
-        window.currentUser = data.user;
-        return data.user;
+        window.currentUser = data;
+        return data;
 
     } catch (error) {
         console.error("❌ خطأ في المصادقة الآمنة:", error);
+        // منع الدخول فوراً عند فشل التحقق
+        alert("فشل التحقق من الهوية. يرجى إعادة فتح التطبيق من تليجرام.");
+        if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.close();
+        }
         return null;
     }
 }
