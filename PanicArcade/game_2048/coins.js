@@ -1,13 +1,12 @@
-// game_2048/coins.js
-
 // coins.js - نظام إدارة العملات والمكافآت الاحترافية العشوائية (نسخة Supabase الآمنة)
 import { supabase } from '../src/api/supabaseClient.js';
-import { authenticateTelegramUser } from '../src/api/auth.js';
+import { authenticateTelegramUser } from '../src/api/auth.js'; // تم إضافة الاستيراد للمصادقة
 
 (function() {
-    let coins = 0; // رصيد مبدئي صفر 
+    // 1. تهيئة الرصيد من السيرفر
+    let coins = 0; // تم التعديل إلى 0 لمنع ظهور رصيد وهمي قبل التحميل
     let nextDailyClaimTime = null;
-    let currentUser = null; 
+    let currentUser = null; // متغير لحفظ بيانات اللاعب الحالي
 
     async function initCoinsFromServer() {
         if (!currentUser || !currentUser.tg_id) return; 
@@ -15,7 +14,7 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
             const { data, error } = await supabase
                 .from('users')
                 .select('coins_balance')
-                .eq('tg_id', currentUser.tg_id) 
+                .eq('tg_id', currentUser.tg_id) // تحديد المستخدم بدقة عبر معرف تليجرام
                 .single();
 
             if (error) throw error;
@@ -53,7 +52,7 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
             }
 
             const { data: success, error } = await supabase.rpc('process_transaction', {
-                p_tg_id: currentUser.tg_id, 
+                p_tg_id: currentUser.tg_id, // تمرير معرف اللاعب للسيرفر
                 p_amount: amount,
                 p_type: reason
             });
@@ -72,7 +71,7 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
             if (coins < amount) return false;
 
             const { data: success, error } = await supabase.rpc('process_transaction', {
-                p_tg_id: currentUser.tg_id, 
+                p_tg_id: currentUser.tg_id, // تمرير معرف اللاعب للسيرفر
                 p_amount: -amount,
                 p_type: reason
             });
@@ -128,11 +127,11 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
         if (!currentUser) return;
         const rewardBtns = [document.getElementById("dailyRewardBtn"), document.getElementById("popupDailyBtn")];
         
-        const { data: result, error } = await supabase.rpc('claim_daily_reward', {
-            p_tg_id: currentUser.tg_id 
+        const { data: result, error } = await supabase.rpc('check_daily_reward', {
+            p_tg_id: currentUser.tg_id // تمرير معرف اللاعب للسيرفر
         });
 
-        if (!error && result && !result.success && result.time_left) {
+        if (!error && result && !result.can_claim && result.time_left) {
             nextDailyClaimTime = Date.now() + (result.time_left * 1000);
             startCountdown(rewardBtns);
         } else {
@@ -155,7 +154,7 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
                     newBtn.textContent = "⏳ جاري استلامها من السيرفر...";
                     
                     const { data: result, error } = await supabase.rpc('claim_daily_reward', {
-                        p_tg_id: currentUser.tg_id 
+                        p_tg_id: currentUser.tg_id // تمرير معرف اللاعب للسيرفر
                     });
                     
                     if (error) {
@@ -206,22 +205,21 @@ import { authenticateTelegramUser } from '../src/api/auth.js';
     window.rewardedTiles = rewardedTiles; 
 
     document.addEventListener("DOMContentLoaded", async () => {
+        // تسجيل الدخول أولاً قبل جلب الرصيد
         currentUser = await authenticateTelegramUser();
         
         if (currentUser) {
-            await initCoinsFromServer();
+            coins = currentUser.coins_balance || 0;
+            updateCoinsUI();
+
             watchGameBoard();
             handleDailyReward();
-            
-            // إخطار واجهة الأزرار بأن الرصيد تم تحميله بنجاح من السيرفر لفتح الطور المدفوع
-            if (window.updatePopupButtons) {
-                window.updatePopupButtons();
-            }
         } else {
             console.error("⚠️ تعذر الاتصال بتليجرام، اللعبة تعمل بدون حفظ الرصيد.");
-            if (window.updatePopupButtons) {
-                window.updatePopupButtons();
-            }
+        }
+
+        if (window.updatePopupButtons) {
+            window.updatePopupButtons();
         }
     });
 })();
