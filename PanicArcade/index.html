@@ -85,8 +85,16 @@
                     document.getElementById("userAvatar").src = tgUser.photo_url;
                 }
             } else {
-                document.getElementById('userName').textContent='فشل التحقق';
-                document.getElementById('userRank').textContent='تم منع الدخول';
+                // منع الدخول فوراً عند فشل التحقق
+                document.getElementById("userName").textContent = "فشل المصادقة";
+                document.getElementById("userRank").textContent = "يرجى المحاولة لاحقاً";
+                // تعطيل روابط اللعب
+                const playButtons = document.querySelectorAll(".play-btn-3d");
+                playButtons.forEach(btn => {
+                    btn.classList.add("disabled");
+                    btn.style.pointerEvents = "none";
+                    btn.textContent = "🔒 غير متاح";
+                });
             }
         }
     });
